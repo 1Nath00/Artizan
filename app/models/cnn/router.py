@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
-from app.auth.dependencies import get_current_active_user
-from app.auth.models import User
 from app.models.cnn.model import classify_image
 
 router = APIRouter(prefix="/models/cnn", tags=["CNN - Image Classification"])
@@ -21,7 +19,6 @@ class ClassificationResponse(BaseModel):
 async def classify(
     file: UploadFile = File(...),
     top_k: int = 5,
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     Upload an image and receive the top-k classification predictions using
