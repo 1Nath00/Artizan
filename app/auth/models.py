@@ -1,15 +1,16 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.sql import func
+from datetime import datetime
+from typing import Optional
 
-from app.database import Base
+from sqlmodel import Field, SQLModel
 
 
-class User(Base):
+class User(SQLModel, table=True):
+    """Modelo de usuario en la base de datos."""
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True, nullable=False)
+    email: str = Field(unique=True, index=True, nullable=False)
+    hashed_password: str = Field(nullable=False)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)

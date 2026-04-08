@@ -3,13 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_api_router
 from app.config import ALLOWED_ORIGINS
-from app.database import Base, engine
+from app.database import init_db
 from app.images.router import router as images_router
+from app.middleware import LoggingMiddleware
 from app.models.cnn.router import router as cnn_router
 from app.models.nlp.router import router as nlp_router
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+init_db()
 
 app = FastAPI(
     title="Artizan API",
@@ -27,6 +28,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(LoggingMiddleware)
 
 app.include_router(auth_api_router)
 app.include_router(images_router)

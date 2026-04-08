@@ -1,14 +1,17 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 
 from app.auth.models import User
 from app.auth.schemas import TokenData, UserCreate
 from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.middleware import logger 
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -16,32 +19,34 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+   return pwd_context.hash(password)
 
 
-def get_user_by_username(db: Session, username: str) -> User | None:
-    return db.query(User).filter(User.username == username).first()
+def get_user_by_username(session: Session, username: str) -> Optional[User]:
+    statement = select(User).where(User.username == username)
+    return session.exec(statement).first()
 
 
-def get_user_by_email(db: Session, email: str) -> User | None:
-    return db.query(User).filter(User.email == email).first()
+def get_user_by_email(session: Session, email: str) -> Optional[User]:
+    statement = select(User).where(User.email == email)
+    return session.exec(statement).first()
 
 
-def create_user(db: Session, user_data: UserCreate) -> User:
+def create_user(session: Session, user_data: UserCreate) -> User:
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
     )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
     return db_user
 
 
-def authenticate_user(db: Session, username: str, password: str) -> User | None:
-    user = get_user_by_username(db, username)
+def authenticate_user(session: Session, username: str, password: str) -> Optional[User]:
+    user = get_user_by_username(session, username)
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user
@@ -54,7 +59,7 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> TokenData | None:
+def decode_token(token: str) -> Optional[TokenData]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
