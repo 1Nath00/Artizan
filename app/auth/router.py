@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
-from app.auth.schemas import Token, UserCreate, UserResponse
+from app.auth.schemas import LoginRequest, Token, UserCreate, UserResponse
 from app.auth.service import (
     authenticate_user,
     create_access_token,
@@ -33,8 +32,14 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
-    user = authenticate_user(session, form_data.username, form_data.password)
+def login(login_data: LoginRequest, session: Session = Depends(get_session)):
+    """
+    Login endpoint - solo requiere username y password.
+    
+    Retorna un token de acceso que debe incluirse en las peticiones subsecuentes
+    como: Authorization: Bearer <token>
+    """
+    user = authenticate_user(session, login_data.username, login_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

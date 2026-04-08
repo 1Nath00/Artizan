@@ -9,7 +9,9 @@ from app.auth.models import User
 from app.auth.schemas import TokenData, UserCreate
 from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.middleware import logger 
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -17,7 +19,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+   return pwd_context.hash(password)
 
 
 def get_user_by_username(session: Session, username: str) -> Optional[User]:
