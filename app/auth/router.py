@@ -34,8 +34,6 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
 @router.post("/login", response_model=Token)
 def login(login_data: LoginRequest, session: Session = Depends(get_session)):
     """
-    Login endpoint - solo requiere username y password.
-    
     Retorna un token de acceso que debe incluirse en las peticiones subsecuentes
     como: Authorization: Bearer <token>
     """
