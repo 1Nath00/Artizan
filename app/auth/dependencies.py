@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session
 
 from app.auth.models import User
-from app.auth.service import decode_token, get_user_by_username
+from app.auth.service import decode_token, get_user_by_email
 from app.database import get_session
 
 # HTTPBearer permite pegar el token directamente en el botón "Authorize"
@@ -26,7 +26,7 @@ def get_current_user(
     token_data = decode_token(token)
     if token_data is None:
         raise credentials_exception
-    user = get_user_by_username(session, username=token_data.username)
+    user = get_user_by_email(session, email=token_data.email)
     if user is None:
         raise credentials_exception
     return user

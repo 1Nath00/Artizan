@@ -9,8 +9,6 @@ from app.auth.models import User
 from app.auth.schemas import TokenData, UserCreate
 from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 
-from app.middleware import logger 
-
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
@@ -45,8 +43,8 @@ def create_user(session: Session, user_data: UserCreate) -> User:
     return db_user
 
 
-def authenticate_user(session: Session, username: str, password: str) -> Optional[User]:
-    user = get_user_by_username(session, username)
+def authenticate_user(session: Session, email: str, password: str) -> Optional[User]:
+    user = get_user_by_email(session, email)
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user
@@ -62,9 +60,9 @@ def create_access_token(data: dict) -> str:
 def decode_token(token: str) -> Optional[TokenData]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        email: str = payload.get("sub")
+        if email is None:
             return None
-        return TokenData(username=username)
+        return TokenData(email=email)
     except JWTError:
         return None

@@ -45,8 +45,8 @@ class UserResponse(UserBase):
 
 
 class LoginRequest(SQLModel):
-    """Schema para la petición de login - solo username y password."""
-    username: str
+    """Schema para la petición de login - solo email y password."""
+    email: EmailStr
     password: str
 
 
@@ -58,4 +58,4 @@ class Token(SQLModel):
 
 class TokenData(SQLModel):
     """Schema para los datos del token."""
-    username: Optional[str] = None
+    email: Optional[str] = None
