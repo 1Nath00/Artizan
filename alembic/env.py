@@ -11,6 +11,8 @@ from app.config import DATABASE_URL
 # Importar todos los modelos para que se registren en SQLModel
 from app.auth.models import User  # noqa
 from app.images.models import Image  # noqa
+from app.categorias.models import Categoria  # noqa
+from app.pinturas.models import Pintura  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
