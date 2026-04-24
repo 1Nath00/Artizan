@@ -99,7 +99,7 @@ def downgrade() -> None:
         batch_op.add_column(sa.Column("content_type", sa.String(), nullable=False, server_default=""))
         batch_op.add_column(sa.Column("size", sa.Integer(), nullable=False, server_default="0"))
         batch_op.add_column(sa.Column("uploaded_by", sa.String(), nullable=False, server_default=""))
-        batch_op.add_column(sa.Column("content", sa.LargeBinary(), nullable=False, server_default=b""))
+        batch_op.add_column(sa.Column("content", sa.LargeBinary(), nullable=False, server_default=sa.text("''")))
 
         batch_op.create_index("ix_images_filename", ["filename"], unique=False)
         batch_op.create_index("ix_images_uploaded_by", ["uploaded_by"], unique=False)
