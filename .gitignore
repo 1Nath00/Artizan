@@ -62,3 +62,5 @@ logs/
 # Node
 node_modules/
 package-lock.json
+
+dataset/
