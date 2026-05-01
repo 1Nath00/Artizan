@@ -6,6 +6,8 @@ from app.config import ALLOWED_ORIGINS
 from app.database import init_db
 from app.images.models import Image  # noqa: F401
 from app.images.router import router as images_router
+from app.pinturas.models import Pintura  # noqa: F401
+from app.pinturas.router import router as pinturas_router
 from app.middleware import LoggingMiddleware
 from app.models.cnn.router import router as cnn_router
 from app.models.nlp.router import router as nlp_router
@@ -34,6 +36,7 @@ app.add_middleware(LoggingMiddleware)
 
 app.include_router(auth_api_router)
 app.include_router(images_router)
+app.include_router(pinturas_router)
 app.include_router(cnn_router)
 app.include_router(nlp_router)
 

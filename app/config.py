@@ -13,3 +13,8 @@ UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
 MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "10"))
 ALLOWED_EXTENSIONS: set = {"jpg", "jpeg", "png", "gif", "webp"}
 ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "")
