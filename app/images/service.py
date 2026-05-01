@@ -1,14 +1,29 @@
 import uuid
 from pathlib import Path
 
+import cloudinary
+import cloudinary.uploader
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
-from app.config import ALLOWED_EXTENSIONS, MAX_IMAGE_SIZE_MB
+from app.config import (
+    ALLOWED_EXTENSIONS,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+    CLOUDINARY_CLOUD_NAME,
+    MAX_IMAGE_SIZE_MB,
+)
 from app.images.models import Image
 
 MAX_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 UPLOADS_DIR = Path("uploads")
+
+cloudinary.config(
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET,
+    secure=True,
+)
 
 
 def _get_extension(filename: str) -> str:
@@ -42,9 +57,23 @@ async def save_image(
     file_path = UPLOADS_DIR / unique_name
     file_path.write_bytes(content)
 
+    # Subir a Cloudinary
+    cloudinary_url = str(file_path)
+    if CLOUDINARY_CLOUD_NAME:
+        try:
+            result = cloudinary.uploader.upload(
+                str(file_path),
+                public_id=f"artizan/images/{unique_name.rsplit('.', 1)[0]}",
+                overwrite=False,
+                resource_type="image",
+            )
+            cloudinary_url = result["secure_url"]
+        except Exception:
+            pass  # Si falla Cloudinary, se guarda igualmente la ruta local
+
     image = Image(
         usuario_id=usuario_id,
-        imagen_url=str(file_path),
+        imagen_url=cloudinary_url,
         categoria_id=categoria_id,
         titulo=titulo,
         descripcion=descripcion,
