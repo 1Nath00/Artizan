@@ -24,7 +24,7 @@ from app.config import (
     CLOUDINARY_CLOUD_NAME,
     DATABASE_URL,
 )
-from app.pinturas.models import Pintura  # noqa: F401
+from app.pinturas.models import Pintura  # noqa: F401 — needed for metadata
 
 DATASET_DIR = Path(__file__).parent.parent / "dataset"
 CATEGORIAS = ["Baroque", "Cubism"]
@@ -40,14 +40,19 @@ cloudinary.config(
 
 # ── Filename parsing ─────────────────────────────────────────────────────────
 
-# Matches trailing year: -YEAR, -YEAR-N, -YEAR(N), etc.
+# Matches trailing: -YEAR, -YEAR-N, -YEAR(N), -YEAR(N)-M, etc.
 _YEAR_RE = re.compile(r"-(\d{4})(?:\(\d+\)|(?:-\d+))*$")
 
 
 def parse_filename(filename: str, categoria: str) -> dict:
-    """
-    Extrae autor, nombre, año del nombre de archivo del dataset.
-    Formato: <autor>_<nombre-pintura>[-<año>][sufijo].jpg
+    """Extract autor, nombre, año from a dataset filename.
+
+    Format: <autor>_<nombre-pintura>[-<año>][optional-suffix].jpg
+    Examples:
+        rembrandt_self-portrait-1659-1.jpg
+        pablo-picasso_a-bullfight-1934.jpg
+        esaias-van-de-velde_hunter-with-two-dogs.jpg
+        guido-reni_not_detected_232244-1635.jpg
     """
     base = filename.rsplit(".", 1)[0]
 
@@ -74,7 +79,7 @@ def parse_filename(filename: str, categoria: str) -> dict:
 
 
 def upload_image(filepath: Path, categoria: str) -> str:
-    """Sube una imagen a Cloudinary y devuelve la URL segura."""
+    """Upload image to Cloudinary and return its secure URL."""
     stem = filepath.stem
     autor_raw = stem.split("_")[0] if "_" in stem else stem
     public_id = f"artizan/pinturas/{categoria}/{autor_raw}/{stem}"
@@ -122,7 +127,7 @@ def main() -> None:
             for filepath in files:
                 filename = filepath.name
 
-                # Chequeo de idempotencia
+                # Idempotency check
                 existing = session.exec(
                     select(Pintura).where(Pintura.filename_original == filename)
                 ).first()
