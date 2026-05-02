@@ -1,7 +1,20 @@
+import uuid
+
+import cloudinary
+import cloudinary.uploader
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
+from typing import Optional
 
+from app.config import CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME
 from app.models.cnn.model import classify_image
+
+cloudinary.config(
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET,
+    secure=True,
+)
 
 router = APIRouter(prefix="/models/cnn", tags=["CNN - Image Classification"])
 
@@ -13,6 +26,7 @@ class Prediction(BaseModel):
 
 class ClassificationResponse(BaseModel):
     predictions: list[Prediction]
+    imagen_url: Optional[str] = None
 
 
 @router.post("/classify", response_model=ClassificationResponse)
@@ -45,4 +59,23 @@ async def classify(
             detail=f"Could not process image: {exc}",
         ) from exc
 
-    return ClassificationResponse(predictions=[Prediction(**r) for r in results])
+    # Subir a Cloudinary
+    imagen_url = None
+    if CLOUDINARY_CLOUD_NAME:
+        try:
+            ext = (file.filename or "image.jpg").rsplit(".", 1)[-1].lower()
+            public_id = f"artizan/cnn/{uuid.uuid4().hex}"
+            result = cloudinary.uploader.upload(
+                image_bytes,
+                public_id=public_id,
+                overwrite=False,
+                resource_type="image",
+            )
+            imagen_url = result["secure_url"]
+        except Exception:
+            pass
+
+    return ClassificationResponse(
+        predictions=[Prediction(**r) for r in results],
+        imagen_url=imagen_url,
+    )

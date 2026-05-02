@@ -11,7 +11,7 @@ class Pintura(SQLModel, table=True):
     autor: str = Field(nullable=False, index=True)
     nombre: str = Field(nullable=False)
     año: Optional[int] = Field(default=None, nullable=True)
-    categoria: str = Field(nullable=False, index=True)
+    categoria: str = Field(nullable=False, index=True)  # "Baroque" o "Cubism"
     url_imagen: str = Field(nullable=False)
     filename_original: str = Field(nullable=False, unique=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
