@@ -1,7 +1,8 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlalchemy import String, cast
+from sqlmodel import Session, or_, select
 
 from app.database import get_session
 from app.pinturas.models import Pintura
@@ -9,10 +10,36 @@ from app.pinturas.models import Pintura
 router = APIRouter(prefix="/pinturas", tags=["pinturas"])
 
 
+@router.get("/search", response_model=List[Pintura])
+def search_pinturas(
+    q: str = Query(..., min_length=1, description="Texto a buscar en autor, nombre o año"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+):
+    """Búsqueda general: coincidencia parcial en autor, nombre o año."""
+    pattern = f"%{q}%"
+    query = (
+        select(Pintura)
+        .where(
+            or_(
+                Pintura.autor.ilike(pattern),
+                Pintura.nombre.ilike(pattern),
+                cast(Pintura.año, String).ilike(pattern),
+            )
+        )
+        .offset(skip)
+        .limit(limit)
+    )
+    return session.exec(query).all()
+
+
 @router.get("/", response_model=List[Pintura])
 def list_pinturas(
     categoria: Optional[str] = Query(None, description="Baroque o Cubism"),
     autor: Optional[str] = Query(None, description="Filtrar por nombre de autor"),
+    nombre: Optional[str] = Query(None, description="Filtrar por nombre de la pintura"),
+    año: Optional[int] = Query(None, description="Filtrar por año exacto"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     session: Session = Depends(get_session),
@@ -22,6 +49,10 @@ def list_pinturas(
         query = query.where(Pintura.categoria == categoria)
     if autor:
         query = query.where(Pintura.autor.ilike(f"%{autor}%"))
+    if nombre:
+        query = query.where(Pintura.nombre.ilike(f"%{nombre}%"))
+    if año is not None:
+        query = query.where(Pintura.año == año)
     query = query.offset(skip).limit(limit)
     return session.exec(query).all()
 

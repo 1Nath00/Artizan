@@ -2,11 +2,17 @@ import uuid
 
 import cloudinary
 import cloudinary.uploader
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from typing import Optional
+from sqlmodel import Session, select
 
+from app.auth.dependencies import get_current_active_user
+from app.auth.models import User
+from app.categorias.models import Categoria
 from app.config import CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME
+from app.database import get_session
+from app.images.models import Image
 from app.models.cnn.model import classify_image
 
 cloudinary.config(
@@ -18,6 +24,12 @@ cloudinary.config(
 
 router = APIRouter(prefix="/models/cnn", tags=["CNN - Image Classification"])
 
+# Map model output labels → categoria slug in DB
+_LABEL_TO_SLUG: dict[str, str] = {
+    "barroco": "baroque",
+    "cubismo": "cubism",
+}
+
 
 class Prediction(BaseModel):
     label: str
@@ -27,16 +39,21 @@ class Prediction(BaseModel):
 class ClassificationResponse(BaseModel):
     predictions: list[Prediction]
     imagen_url: Optional[str] = None
+    imagen_id: Optional[int] = None
+    categoria: Optional[str] = None
 
 
 @router.post("/classify", response_model=ClassificationResponse)
 async def classify(
     file: UploadFile = File(...),
     top_k: int = 5,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Upload an image and receive the top-k classification predictions using
-    a pre-trained ResNet-50 CNN.
+    a pre-trained CNN. The result is saved to the database linked to the
+    authenticated user.
     """
     content_type = file.content_type or ""
     if not content_type.startswith("image/"):
@@ -75,7 +92,34 @@ async def classify(
         except Exception:
             pass
 
+    # Resolver categoria a partir de la predicción principal
+    top_label: str = results[0]["label"] if results else ""
+    slug = _LABEL_TO_SLUG.get(top_label.lower())
+    categoria_id: Optional[int] = None
+    categoria_nombre: Optional[str] = None
+    if slug:
+        categoria = session.exec(
+            select(Categoria).where(Categoria.slug == slug)
+        ).first()
+        if categoria:
+            categoria_id = categoria.id
+            categoria_nombre = categoria.nombre
+
+    # Guardar en la tabla images
+    imagen_db = Image(
+        usuario_id=current_user.id,
+        imagen_url=imagen_url or "",
+        categoria_id=categoria_id,
+        titulo=file.filename or "sin_nombre",
+        descripcion=f"CNN classify – top: {top_label} ({results[0]['confidence']:.2%})" if results else None,
+    )
+    session.add(imagen_db)
+    session.commit()
+    session.refresh(imagen_db)
+
     return ClassificationResponse(
         predictions=[Prediction(**r) for r in results],
         imagen_url=imagen_url,
+        imagen_id=imagen_db.id,
+        categoria=categoria_nombre,
     )

@@ -5,6 +5,18 @@ from pydantic import EmailStr, field_validator
 from sqlmodel import SQLModel
 
 
+class ImageSummary(SQLModel):
+    """Resumen de imagen para incluir en UserResponse."""
+    id: int
+    imagen_url: str
+    titulo: Optional[str] = None
+    categoria_id: Optional[int] = None
+    descripcion: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class UserBase(SQLModel):
     """Campos base compartidos entre User schemas."""
     username: str
@@ -40,6 +52,7 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     created_at: datetime
+    imagenes: list[ImageSummary] = []
 
     model_config = {"from_attributes": True}
 

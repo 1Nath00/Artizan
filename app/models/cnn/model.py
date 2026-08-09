@@ -30,7 +30,7 @@ def classify_image(image_bytes: bytes, top_k: int = 5) -> list[dict[str, Any]]:
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = image.resize((IMG_WIDTH, IMG_HEIGHT))
 
-    # ✅ AHORA: pasar píxeles crudos [0, 255], el modelo ya tiene Rescaling interno
+    # AHORA: pasar píxeles crudos [0, 255], el modelo ya tiene Rescaling interno
     tensor = np.array(image, dtype=np.float32)
     tensor = np.expand_dims(tensor, axis=0)  # (1, 160, 160, 3)
 

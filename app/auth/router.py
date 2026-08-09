@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
+from sqlmodel import select
+
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
-from app.auth.schemas import LoginRequest, Token, UserCreate, UserResponse
+from app.auth.schemas import ImageSummary, LoginRequest, Token, UserCreate, UserResponse
 from app.auth.service import (
     authenticate_user,
     create_access_token,
@@ -12,6 +14,7 @@ from app.auth.service import (
     get_user_by_username,
 )
 from app.database import get_session
+from app.images.models import Image
 
 from app.middleware import logger
 
@@ -55,5 +58,19 @@ def login(login_data: LoginRequest, session: Session = Depends(get_session)):
 
 
 @router.get("/me", response_model=UserResponse)
-def read_current_user(current_user: User = Depends(get_current_active_user)):
-    return current_user
+def read_current_user(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session),
+):
+    imagenes = list(
+        session.exec(select(Image).where(Image.usuario_id == current_user.id)).all()
+    )
+    response = UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
+        imagenes=[ImageSummary.model_validate(img) for img in imagenes],
+    )
+    return response
