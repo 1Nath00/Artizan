@@ -12,7 +12,7 @@ class ImageResponse(BaseModel):
     titulo: Optional[str]
     descripcion: Optional[str]
     estado: str
-    creado_en: datetime
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

@@ -42,6 +42,7 @@ uploads/
 
 # Model weights
 *.h5
+*.keras
 *.pt
 *.pth
 *.ckpt

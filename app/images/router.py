@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+from PIL import UnidentifiedImageError
 from sqlmodel import Session
 
 from app.auth.dependencies import get_current_active_user
@@ -79,6 +81,37 @@ def download_image(
     request_logger.info(f"Image downloaded id={image_id} by=user:{current_user.id} from={client_host}")
     return Response(content=file_path.read_bytes(), media_type=f"image/{ext}")
 
+@router.post("/{image_id}/detect")
+def detect_image(
+    image_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+):
+    image = service.get_image(session, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    if image.usuario_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    try:
+        detections = service.detect_objects(image.imagen_url)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The stored image file was not found",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not download the stored image",
+        ) from exc
+    except (UnidentifiedImageError, OSError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Could not process the stored image: {exc}",
+        ) from exc
+
+    return {"detections": detections}
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_image(

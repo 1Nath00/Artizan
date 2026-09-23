@@ -3,6 +3,10 @@ from pathlib import Path
 
 import cloudinary
 import cloudinary.uploader
+from ultralytics import YOLO
+import httpx
+from PIL import Image as PILImage
+import io
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
@@ -17,6 +21,8 @@ from app.images.models import Image
 
 MAX_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 UPLOADS_DIR = Path("uploads")
+
+model: YOLO = YOLO("yolo11n.pt")
 
 cloudinary.config(
     cloud_name=CLOUDINARY_CLOUD_NAME,
@@ -112,3 +118,23 @@ def delete_image(session: Session, image_id: int, usuario_id: int) -> bool:
     session.delete(image)
     session.commit()
     return True
+
+def detect_objects(image_url: str, conf: float = 0.25) -> list[dict]:
+    response = httpx.get(image_url, timeout=10.0, follow_redirects=True)
+    response.raise_for_status()
+
+    content_type = response.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        raise ValueError(f"La URL no devolvió una imagen válida (content-type={content_type})")
+
+    img = PILImage.open(io.BytesIO(response.content)).convert("RGB")
+    results = model(img, conf=conf)
+    detections = []
+    for r in results:
+        for box in r.boxes:
+            detections.append({
+                "clase": model.names[int(box.cls)],
+                "confianza": round(float(box.conf), 4),
+                "bbox": [round(x, 2) for x in box.xyxy.tolist()[0]],
+            })
+    return detections

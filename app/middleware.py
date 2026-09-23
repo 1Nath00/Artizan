@@ -86,7 +86,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Log de errores
             process_time = time.time() - start_time
-            logger.error(
+            logger.exception(
                 f"✗ {method} {path} "
                 f"Error: {str(e)} "
                 f"Duration: {process_time:.3f}s"

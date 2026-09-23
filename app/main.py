@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_api_router
 from app.config import ALLOWED_ORIGINS
 from app.database import init_db
+from app.categorias.models import Categoria  # noqa: F401
 from app.images.models import Image  # noqa: F401
 from app.images.router import router as images_router
 from app.pinturas.models import Pintura  # noqa: F401
