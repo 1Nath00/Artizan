@@ -125,3 +125,4 @@ def delete_image(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
     client_host = request.client.host if request.client else "unknown"
     request_logger.info(f"Image deleted id={image_id} by=user:{current_user.id} from={client_host}")
+
