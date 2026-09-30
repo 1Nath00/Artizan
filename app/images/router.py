@@ -10,7 +10,7 @@ from app.auth.models import User
 from app.database import get_session
 from app.images import service
 from app.middleware import logger as request_logger
-from app.images.schemas import ImageResponse
+from app.images.schemas import AnalyzeResponse, ImageResponse
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -39,6 +39,55 @@ async def upload_image(
         f"by=user:{current_user.id} from={client_host}"
     )
     return image
+
+
+@router.post("/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_201_CREATED)
+async def analyze_image(
+    request: Request,
+    file: UploadFile = File(...),
+    top_k: int = Form(default=5),
+    conf: float = Form(default=0.25),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Sube la imagen una sola vez y ejecuta clasificaci\u00f3n y detecci\u00f3n en paralelo."""
+    content_type = file.content_type or ""
+    if not content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only image files are accepted",
+        )
+    if top_k < 1 or top_k > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="top_k must be between 1 and 100",
+        )
+
+    try:
+        image, predictions, detections = await service.analyze_image(
+            session,
+            file,
+            usuario_id=current_user.id,
+            top_k=top_k,
+            conf=conf,
+        )
+    except (UnidentifiedImageError, OSError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Could not process image: {exc}",
+        ) from exc
+
+    client_host = request.client.host if request.client else "unknown"
+    request_logger.info(
+        f"Image analyzed id={image.id} titulo={image.titulo} "
+        f"by=user:{current_user.id} from={client_host}"
+    )
+    return AnalyzeResponse(
+        image_id=image.id,
+        imagen_url=image.imagen_url,
+        predictions=predictions,
+        detections=detections,
+    )
 
 
 @router.get("/", response_model=list[ImageResponse])
