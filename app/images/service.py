@@ -1,3 +1,4 @@
+import logging
 import uuid
 from pathlib import Path
 
@@ -21,6 +22,8 @@ from app.images.models import Image
 
 MAX_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 UPLOADS_DIR = Path("uploads")
+
+logger = logging.getLogger(__name__)
 
 model: YOLO = YOLO("yolo11n.pt")
 
@@ -74,8 +77,11 @@ async def save_image(
                 resource_type="image",
             )
             cloudinary_url = result["secure_url"]
+            file_path.unlink(missing_ok=True)  # ya no se necesita la copia local
         except Exception:
-            pass  # Si falla Cloudinary, se guarda igualmente la ruta local
+            logger.exception("Cloudinary upload failed, falling back to local path")
+    else:
+        logger.warning("CLOUDINARY_CLOUD_NAME is not set, skipping Cloudinary upload")
 
     image = Image(
         usuario_id=usuario_id,
