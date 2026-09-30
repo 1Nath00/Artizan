@@ -22,3 +22,22 @@ class ImageCreate(BaseModel):
     categoria_id: Optional[int] = None
     titulo: Optional[str] = None
     descripcion: Optional[str] = None
+
+
+class Prediction(BaseModel):
+    label: str
+    confidence: float
+
+
+class Detection(BaseModel):
+    clase: str
+    confianza: float
+    bbox: list[float]
+
+
+class AnalyzeResponse(BaseModel):
+    image_id: int
+    imagen_url: str
+    predictions: list[Prediction]
+    detections: list[Detection]
+
