@@ -53,6 +53,22 @@ def test_classify_invalid_top_k(client, auth_headers):
     assert resp.status_code == 400
 
 
+def test_classify_failure_does_not_expose_exception(client, auth_headers):
+    with patch(
+        "app.models.cnn.router.classify_image",
+        side_effect=RuntimeError("private /internal/model failure"),
+    ):
+        resp = client.post(
+            "/models/cnn/classify",
+            headers=auth_headers,
+            files={"file": ("img.png", _make_png_bytes(), "image/png")},
+        )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Could not process image."}
+    assert "private /internal/model failure" not in resp.text
+
+
 def test_classify_requires_auth(client):
     png = _make_png_bytes()
     resp = client.post(

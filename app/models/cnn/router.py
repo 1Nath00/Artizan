@@ -68,9 +68,10 @@ async def classify(
     try:
         results = classify_image(image_bytes, top_k=top_k)
     except Exception as exc:
+        logger.exception("Image classification failed")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Could not process image: {exc}",
+            detail="Could not process image.",
         ) from exc
 
     # Subir a Cloudinary; si no está configurado o falla, se guarda localmente

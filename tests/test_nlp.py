@@ -37,6 +37,35 @@ def test_generate_text_exceeds_max_tokens(client, auth_headers):
     assert resp.status_code == 422
 
 
+def test_validation_error_has_safe_detail(client, auth_headers):
+    resp = client.post(
+        "/models/nlp/generate",
+        headers=auth_headers,
+        json={"prompt": "private-prompt-marker", "max_new_tokens": 201},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Invalid request data."}
+    assert "private-prompt-marker" not in resp.text
+
+
+def test_generation_failure_has_safe_detail_and_is_logged(client, auth_headers, caplog):
+    with patch(
+        "app.models.nlp.router.generate_text",
+        side_effect=RuntimeError("private /internal/model failure"),
+    ):
+        resp = client.post(
+            "/models/nlp/generate",
+            headers=auth_headers,
+            json={"prompt": "Hello"},
+        )
+
+    assert resp.status_code == 500
+    assert resp.json() == {"detail": "An unexpected error occurred."}
+    assert "private /internal/model failure" not in resp.text
+    assert "private /internal/model failure" in caplog.text
+
+
 def test_generate_text_requires_auth(client):
     resp = client.post(
         "/models/nlp/generate",
