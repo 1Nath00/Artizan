@@ -65,3 +65,11 @@ node_modules/
 package-lock.json
 
 dataset/
+
+# Local RAG data, index, and diagnostic artifacts
+/rag_data/
+/rag_db/
+/diagnostico_rag.py
+/diagnostico_*.csv
+/evaluacion_rag.jsonl
+/tests/test_diagnostico_rag.py

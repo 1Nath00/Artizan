@@ -5,7 +5,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    if exc.status_code >= 500:
+    if exc.status_code >= 500 and exc.status_code != 503:
         detail = "An unexpected error occurred."
     else:
         detail = exc.detail if isinstance(exc.detail, str) else "Request failed."

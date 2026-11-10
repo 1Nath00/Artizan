@@ -13,6 +13,7 @@ from app.pinturas.router import router as pinturas_router
 from app.middleware import LoggingMiddleware
 from app.models.cnn.router import router as cnn_router
 from app.models.nlp.router import router as nlp_router
+from app.models.rag.router import router as rag_router
 
 # Create database tables
 init_db()
@@ -42,6 +43,7 @@ app.include_router(images_router)
 app.include_router(pinturas_router)
 app.include_router(cnn_router)
 app.include_router(nlp_router)
+app.include_router(rag_router)
 
 
 @app.get("/", tags=["root"])
