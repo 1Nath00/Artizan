@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
+from app.middleware import logger
 from app.models.nlp.model import generate_text
 
 router = APIRouter(prefix="/models/nlp", tags=["NLP - Text Generation"])
@@ -44,9 +45,10 @@ def generate(
             do_sample=body.do_sample,
         )
     except Exception as exc:
+        logger.exception("Text generation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Text generation failed: {exc}",
+            detail="Could not generate text.",
         ) from exc
 
     return TextGenerationResponse(

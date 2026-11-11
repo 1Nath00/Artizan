@@ -72,9 +72,10 @@ async def analyze_image(
             conf=conf,
         )
     except (UnidentifiedImageError, OSError, RuntimeError) as exc:
+        request_logger.exception("Image analysis failed")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Could not process image: {exc}",
+            detail="Could not process image.",
         ) from exc
 
     client_host = request.client.host if request.client else "unknown"
@@ -145,19 +146,22 @@ def detect_image(
     try:
         detections = service.detect_objects(image.imagen_url)
     except FileNotFoundError as exc:
+        request_logger.exception("Stored image file not found")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The stored image file was not found",
         ) from exc
     except httpx.HTTPError as exc:
+        request_logger.exception("Stored image download failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Could not download the stored image",
         ) from exc
     except (UnidentifiedImageError, OSError, RuntimeError) as exc:
+        request_logger.exception("Stored image processing failed")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Could not process the stored image: {exc}",
+            detail="Could not process the stored image.",
         ) from exc
 
     return {"detections": detections}

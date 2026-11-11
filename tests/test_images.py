@@ -1,6 +1,8 @@
 """Tests for the images module."""
 
 import io
+from unittest.mock import patch
+
 from PIL import Image
 
 
@@ -32,6 +34,41 @@ def test_upload_invalid_extension(client, auth_headers):
         files={"file": ("script.exe", b"fake", "application/octet-stream")},
     )
     assert resp.status_code == 400
+
+
+def test_analyze_failure_does_not_expose_exception(client, auth_headers):
+    with patch(
+        "app.images.router.service.analyze_image",
+        side_effect=RuntimeError("private /internal/image failure"),
+    ):
+        resp = client.post(
+            "/images/analyze",
+            headers=auth_headers,
+            files={"file": ("test.png", _make_png_bytes(), "image/png")},
+        )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Could not process image."}
+    assert "private /internal/image failure" not in resp.text
+
+
+def test_detect_failure_does_not_expose_exception(client, auth_headers):
+    upload = client.post(
+        "/images/upload",
+        headers=auth_headers,
+        files={"file": ("detect.png", _make_png_bytes(), "image/png")},
+    )
+    image_id = upload.json()["id"]
+
+    with patch(
+        "app.images.router.service.detect_objects",
+        side_effect=RuntimeError("private /internal/image failure"),
+    ):
+        resp = client.post(f"/images/{image_id}/detect", headers=auth_headers)
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Could not process the stored image."}
+    assert "private /internal/image failure" not in resp.text
 
 
 def test_list_images(client, auth_headers):

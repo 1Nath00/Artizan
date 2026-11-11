@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_api_router
 from app.config import ALLOWED_ORIGINS
 from app.database import init_db
+from app.core.errors import register_error_handlers
 from app.categorias.models import Categoria  # noqa: F401
 from app.images.models import Image  # noqa: F401
 from app.images.router import router as images_router
@@ -12,6 +13,7 @@ from app.pinturas.router import router as pinturas_router
 from app.middleware import LoggingMiddleware
 from app.models.cnn.router import router as cnn_router
 from app.models.nlp.router import router as nlp_router
+from app.models.rag.router import router as rag_router
 
 # Create database tables
 init_db()
@@ -24,6 +26,7 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
+register_error_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +43,7 @@ app.include_router(images_router)
 app.include_router(pinturas_router)
 app.include_router(cnn_router)
 app.include_router(nlp_router)
+app.include_router(rag_router)
 
 
 @app.get("/", tags=["root"])
