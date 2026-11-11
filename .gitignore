@@ -73,3 +73,5 @@ dataset/
 /diagnostico_*.csv
 /evaluacion_rag.jsonl
 /tests/test_diagnostico_rag.py
+# RAG index, datasets, heavy models, logs
+

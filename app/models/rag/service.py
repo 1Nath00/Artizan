@@ -31,25 +31,29 @@ TEXT_KEYS = [
 ]
 
 SYSTEM_PROMPT = """# ROL
-Eres un profesor experto en historia del arte que responde con rigor académico y lenguaje claro.
+Eres un profesor experto en historia del arte que responde con rigor académico absoluto.
+Tu única fuente de verdad es el CONTEXTO proporcionado.
 
-# RESTRICCIONES
-- Usa ÚNICAMENTE la información de los fragmentos de CONTEXTO.
-- Si el contexto no contiene la respuesta, responde exactamente: "No encuentro información suficiente en los documentos."
-- No inventes fechas, nombres ni obras que no aparezcan en el contexto.
-- Responde siempre en español.
+# RESTRICCIONES CRÍTICAS
+1. ÚNICAMENTE uses información explícita en los FRAGMENTOS del CONTEXTO.
+2. CITA TODOS los fragmentos que respalden cada afirmación, así: [1], [2], etc.
+3. Si la pregunta NO puede responderse completamente con el CONTEXTO:
+   - Responde qué SÍ sabes del contexto.
+   - Menciona explícitamente qué información falta.
+   - NUNCA inventes, supongas ni extraples.
+4. NO repitas información ya mencionada.
+5. NO inventes: fechas, nombres de artistas, obras, lugares, períodos.
+6. Si no hay información suficiente, responde:
+   "No encuentro información suficiente en los documentos."
+7. Responde SIEMPRE en español, académico y claro.
 
-# PROCESO (hazlo internamente, no lo muestres)
-1. Identifica qué fragmentos son relevantes para la pregunta.
-2. Descarta los irrelevantes.
-3. Redacta la respuesta usando solo lo relevante.
+# ESTRATEGIA
+1. Identifica qué fragmentos son directamente relevantes.
+2. Ordena la información de manera lógica.
+3. Redacta usando SOLO lo del contexto, citando TODAS las fuentes.
 
-# FORMATO DE SALIDA
-Respuesta en 3-6 oraciones. Cita las fuentes con [n] al final de cada afirmación.
-
-# EJEMPLO
-Pregunta: ¿Qué es el fauvismo?
-Respuesta: El fauvismo fue un movimiento de inicios del siglo XX que destacó por el uso intenso y no naturalista del color [1]."""
+# FORMATO
+Respuesta en párrafos (3-8 oraciones), cita al final de cada idea: [número]."""
 
 _index_lock = threading.Lock()
 _LEXICAL_STOP_WORDS = frozenset(
@@ -322,7 +326,24 @@ def _lexical_ranks(question: str, texts: list[str]) -> list[int]:
     return sorted(scores, key=lambda index: (-scores[index], index))
 
 
-def retrieve(question: str, k: int | None = None) -> list[dict[str, Any]]:
+def retrieve(
+    question: str, 
+    k: int | None = None,
+    use_deduplication: bool = True,
+    dedup_threshold: float = 0.7
+) -> list[dict[str, Any]]:
+    """
+    Retrieve top-k relevant chunks for a question.
+    
+    Args:
+        question: User's question
+        k: Number of chunks to return (defaults to config.RAG_TOP_K)
+        use_deduplication: Whether to remove duplicate chunks
+        dedup_threshold: Similarity threshold for deduplication (0-1)
+    
+    Returns:
+        List of relevant chunks with metadata
+    """
     k = k or config.RAG_TOP_K
     collection = _get_collection()
     candidate_count = min(collection.count(), max(k * 4, 20))
@@ -340,43 +361,127 @@ def retrieve(question: str, k: int | None = None) -> list[dict[str, Any]]:
     scores = {index: 1 / (60 + index + 1) for index in range(len(hits))}
     for rank, index in enumerate(_lexical_ranks(question, [hit["text"] for hit in hits]), 1):
         scores[index] += 1 / (60 + rank)
-    return [hit for index, hit in sorted(enumerate(hits), key=lambda item: -scores[item[0]])[:k]]
+    
+    ranked_hits = [hit for index, hit in sorted(enumerate(hits), key=lambda item: -scores[item[0]])[:k]]
+    
+    # Apply deduplication if requested
+    if use_deduplication:
+        from app.models.rag.retrieval_optimizations import deduplicate_hits
+        ranked_hits = deduplicate_hits(ranked_hits, similarity_threshold=dedup_threshold)
+    
+    return ranked_hits[:k]
 
 
 def build_messages(question: str, hits: list[dict[str, Any]]) -> list[dict[str, str]]:
-    context = "\n\n".join(
-        f"[{i + 1}] (fuente: {h['filename']})\n{h['text']}" for i, h in enumerate(hits)
-    )
+    # Group fragments by document for better context
+    by_document: dict[str, list[tuple[int, str]]] = {}
+    for i, h in enumerate(hits, 1):
+        filename = h.get("filename", "desconocido")
+        if filename not in by_document:
+            by_document[filename] = []
+        by_document[filename].append((i, h.get("text", "")))
+    
+    # Build context with document grouping
+    context_parts = []
+    for filename, fragments in by_document.items():
+        doc_header = f"## Documento: {filename}"
+        context_parts.append(doc_header)
+        
+        for fragment_num, text in fragments:
+            context_parts.append(f"[{fragment_num}] {text}")
+    
+    context = "\n\n".join(context_parts)
+    
     user = f"""# CONTEXTO
 {context}
 
-# TAREA
-Responde la siguiente pregunta siguiendo las reglas del sistema.
+# PREGUNTA
+{question}
 
-Pregunta: {question}
-Respuesta:"""
+# INSTRUCCIONES
+- Responde SOLO con información del CONTEXTO.
+- Cita TODOS los fragmentos [n] que respalden cada afirmación.
+- Si no hay suficiente información, dilo explícitamente.
+- No inventes información."""
+    
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
 
 
 def ask(question: str, k: int | None = None) -> dict[str, Any]:
     t0 = time.time()
+    t_embed = time.time()
     hits = retrieve(question, k)
+    t_retrieval = time.time() - t_embed
+    
     try:
         import ollama
 
+        t_llm = time.time()
         response = ollama.Client(host=config.OLLAMA_HOST).chat(
             model=config.RAG_LLM_MODEL,
             messages=build_messages(question, hits),
             options={"temperature": config.RAG_TEMPERATURE, "num_ctx": config.RAG_NUM_CTX},
         )
+        t_llm = time.time() - t_llm
     except Exception as exc:
         raise RAGError(
             f"Could not reach Ollama at {config.OLLAMA_HOST} with model '{config.RAG_LLM_MODEL}'. "
             f"Make sure `ollama serve` is running and the model is pulled. Cause: {type(exc).__name__}: {exc}"
         ) from exc
+    
     return {
         "question": question,
         "answer": response["message"]["content"].strip(),
         "sources": hits,
         "latency": round(time.time() - t0, 2),
+        "latency_breakdown": {
+            "retrieval_ms": round(t_retrieval * 1000, 0),
+            "llm_ms": round(t_llm * 1000, 0),
+        }
+    }
+
+
+def retrieve_multiple_k(question: str, k_values: list[int] = None) -> dict[str, Any]:
+    """
+    Test retrieval with multiple K values to find optimal configuration.
+    
+    Args:
+        question: User's question
+        k_values: List of K values to test (defaults to [1, 3, 5, 8, 10, 12, 15, 20])
+    
+    Returns:
+        Dictionary with results for each K value
+    """
+    k_values = k_values or [1, 3, 5, 8, 10, 12, 15, 20]
+    results = {}
+    
+    for k in k_values:
+        hits = retrieve(question, k)
+        results[k] = {
+            "hits_count": len(hits),
+            "unique_documents": len(set(h["filename"] for h in hits)),
+            "avg_distance": sum(h.get("distance", 0) for h in hits) / len(hits) if hits else 0,
+            "hits": hits,
+        }
+    
+    return {
+        "question": question,
+        "results": results
+    }
+
+
+def analyze_retrieval(question: str, k: int = 10) -> dict[str, Any]:
+    """
+    Analyze retrieval quality and statistics.
+    """
+    from app.models.rag.retrieval_optimizations import analyze_chunks
+    
+    hits = retrieve(question, k)
+    stats = analyze_chunks(hits)
+    
+    return {
+        "question": question,
+        "k": k,
+        "hits_count": len(hits),
+        **stats
     }
