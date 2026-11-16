@@ -16,7 +16,7 @@ ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
 # RAG (art knowledge base)
 RAG_DATA_DIR: str = os.getenv("RAG_DATA_DIR", "rag_data")
-RAG_DB_DIR: str = os.getenv("RAG_DB_DIR", "rag_db")
+RAG_DB_DIR: str = os.getenv("CHROMA_PATH", "rag_db")
 RAG_EMBEDDING_MODEL: str = os.getenv("RAG_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
 RAG_LLM_MODEL: str = os.getenv("RAG_LLM_MODEL", "llama3.2")
 RAG_CHUNK_SIZE: int = int(os.getenv("RAG_CHUNK_SIZE", "1000"))
