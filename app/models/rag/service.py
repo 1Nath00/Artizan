@@ -190,6 +190,8 @@ def _embed_query(q: str) -> list[list[float]]:
 def _client():
     import chromadb
 
+    print("CHROMA_PATH configurado:", config.RAG_DB_DIR)
+    print("RAG_DATA_DIR configurado:", config.RAG_DATA_DIR)
     return chromadb.PersistentClient(path=config.RAG_DB_DIR)
 
 
