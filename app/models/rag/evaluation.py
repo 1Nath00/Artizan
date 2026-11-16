@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import unicodedata
 from collections import Counter
@@ -51,6 +52,91 @@ QUESTIONS = {
         "¿Qué significa el término barroco?",
     ],
 }
+
+# Ground truth por PREGUNTA (no por tema).
+# Cada set contiene los filenames que realmente responden esa pregunta.
+RELEVANT_BY_QUESTION: dict[str, set[str]] = {
+    # --- CUBISMO ---
+    "¿Qué es el cubismo?": {
+        "El cubismo.txt",
+        "cubismo-2.txt",
+        "Manifiesto-del-Cubismo-1913.txt",
+        "manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt",
+        "cubismo_neoclasicismo_y_el_renacimiento.txt",
+        "historia_del_cubismo.txt",
+        "cubismo.txt"
+    },
+    "Define el cubismo como movimiento artístico.": {
+        "El cubismo.txt",
+        "cubismo-2.txt",
+        "Manifiesto-del-Cubismo-1913.txt",
+        "manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt",
+        "historia_del_cubismo.txt",
+        "cubismo_neoclasicismo_y_el_renacimiento.txt",
+        "edicao completa - revista educacao continuada - vol 7 n5 mai 2025.txt"
+    },
+    "¿Cuáles son las características del cubismo?": {
+        "El cubismo.txt",
+        "cubismo-2.txt",
+        "Manifiesto-del-Cubismo-1913.txt",
+        "Cubismo_Neoclasicismo_y_el_renacimiento.txt",
+        "manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt",
+        "cubismo.txt",
+        "edicao completa - revista educacao continuada - vol 7 n5 mai 2025.txt",
+        
+    },
+    "¿Quiénes fundaron el cubismo y cuándo surgió?": {
+        "Picasso - Ernesto Ballesteros Arranz.txt",
+        "Manifiesto-del-Cubismo-1913.txt",
+        "El cubismo.txt",
+        "historia_del_cubismo.txt",
+        "cubismo-2.txt",
+        "edicao completa - revista educacao continuada - vol 7 n5 mai 2025.txt"
+    },
+    "¿En qué consiste la representación cubista de los objetos?": {
+        "El cubismo.txt",
+        "cubismo-2.txt",
+        "Manifiesto-del-Cubismo-1913.txt",
+        "manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt",
+        "el_cubismo_pintura_de_historia_o_arte_co.txt",
+        "apollinaire-picasso-y-el-cubismo-poetico-932844-1.txt",
+        "edicao completa - revista educacao continuada - vol 7 n5 mai 2025.txt",
+    },
+    # --- BARROCO ---
+    "¿Qué es el barroco?": {
+        "QUE_ES_EL_BARROCO_1.txt",
+        "El_Per├¡odo_Barroco.txt",
+        "el-espiritu-del-barroco-1261609.txt",
+        "manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt",
+        "echeverria-bolivar-la-modernidad-de-lo-barroco.txt"
+    },
+    "Define el arte barroco.": {
+        "QUE_ES_EL_BARROCO_1.txt",
+        "El_Per├¡odo_Barroco.txt",
+        "el-espiritu-del-barroco-1261609.txt",
+        "manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt",
+        "echeverria-bolivar-la-modernidad-de-lo-barroco.txt",
+    },
+    "¿Cuáles son las características del barroco?": {
+        "QUE_ES_EL_BARROCO_1.txt",
+        "el-espiritu-del-barroco-1261609.txt",
+        "16. Historia del Arte en la Edad Moderna. Renacimiento y Barroco autor Antonio Naval Mas.txt",
+        "Echeverria-Bolivar-La-Modernidad-De-Lo-Barroco.txt",
+        "echeverria-bolivar-la-modernidad-de-lo-barroco.txt",
+        "adminojs73-92.txt",
+    },
+    "¿Cuándo surgió el barroco y qué lo caracteriza?": {
+        "El_Per├¡odo_Barroco.txt",
+        "16. Historia del Arte en la Edad Moderna. Renacimiento y Barroco autor Antonio Naval Mas.txt",
+        "QUE_ES_EL_BARROCO_1.txt",
+        "echeverria-bolivar-la-modernidad-de-lo-barroco.txt",
+    },
+    "¿Qué significa el término barroco?": {
+        "QUE_ES_EL_BARROCO_1.txt",
+        "el-espiritu-del-barroco-1261609.txt",
+    },
+}
+
 REFS = {
     "cubismo": [
         "El cubismo es un movimiento artístico de vanguardia surgido en París a principios del siglo XX, iniciado por Pablo Picasso y Georges Braque, que descompone los objetos en formas geométricas y los representa desde varios puntos de vista a la vez, rompiendo con la perspectiva tradicional.",
@@ -253,30 +339,71 @@ def _mean(xs: list[float]) -> float:
     return round(sum(xs) / len(xs), 3) if xs else 0.0
 
 
+def _canon_filename(name: str) -> str:
+    base = os.path.basename(name.replace("\\", "/"))
+    # Solo intenta reparar mojibake si HAY mojibake (caracteres de la lista)
+    if any(ch in base for ch in "├┬┴┼¡│▒"):
+        try:
+            base = base.encode("latin-1", errors="ignore").decode("utf-8", errors="ignore") or base
+        except Exception:
+            pass
+    nfd = unicodedata.normalize("NFD", base)
+    return "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower().strip()
+
+
+def verify_filenames() -> dict[str, Any]:
+    real = {_canon_filename(d["filename"]) for d in service.load_documents(config.RAG_DATA_DIR)}
+    gt_all = {_canon_filename(f) for s in RELEVANT_BY_QUESTION.values() for f in s}
+    missing = sorted(gt_all - real)
+    return {
+        "filenames_en_gt": len(gt_all),
+        "filenames_en_corpus": len(real),
+        "faltantes_en_corpus": missing,
+        "ok": len(missing) == 0,
+    }
+
+
 def eval_retrieval(k: int, relevant: dict[str, set[str]]) -> list[dict[str, Any]]:
     rows = []
     for topic, qs in QUESTIONS.items():
         for q in qs:
-            got = {h["filename"] for h in service.retrieve(q, k)}
-            p, r, f1 = _prf_sets(got, relevant[topic])
-            rows.append({"tema": topic, "pregunta": q, "precision": round(p, 3), "recall": round(r, 3), "f1": round(f1, 3)})
+            got_raw = [h["filename"] for h in service.retrieve(q, k)]
+            got = list(dict.fromkeys(_canon_filename(f) for f in got_raw))
+            gt = {_canon_filename(f) for f in relevant.get(q, set())}
+            p, r, f1 = _prf_sets(set(got), gt)
+            rows.append({
+                "tema": topic,
+                "pregunta": q,
+                "precision": round(p, 3),
+                "recall": round(r, 3),
+                "f1": round(f1, 3),
+                "n_relevantes": len(gt),
+                "n_recuperados": len(got),
+                "faltantes": sorted(gt - set(got)),
+                "sobrantes": sorted(set(got) - gt),
+            })
     return rows
 
 
 def evaluate_retrieval(k: int | None = None, sweep: bool = True) -> dict[str, Any]:
     k = k or config.RAG_TOP_K
-    relevant = relevant_docs()
-    rows = eval_retrieval(k, relevant)
+    
+    # Verificar que los filenames en el GT existen en el corpus
+    missing = verify_filenames()
+    if not missing["ok"]:
+        raise ValueError(f"Filenames no encontrados en el corpus: {missing}")
+    
+    rows = eval_retrieval(k, RELEVANT_BY_QUESTION)
     result: dict[str, Any] = {
         "k": k,
-        "relevantes": {t: sorted(s) for t, s in relevant.items()},
+        "relevantes": {q: sorted(s) for q, s in RELEVANT_BY_QUESTION.items()},
         "preguntas": rows,
         "promedio": {m: _mean([r[m] for r in rows]) for m in ("precision", "recall", "f1")},
     }
     if sweep:
         out = []
         for kk in (1, 3, 5, 8, 10):
-            d = eval_retrieval(kk, relevant)
+            d = eval_retrieval(kk, RELEVANT_BY_QUESTION)
             out.append({"k": kk, **{m: _mean([r[m] for r in d]) for m in ("precision", "recall", "f1")}})
         result["barrido_k"] = out
     rob = {}

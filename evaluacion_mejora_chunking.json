@@ -1,0 +1,114 @@
+{
+  "k": 10,
+  "relevantes": {
+    "cubismo": [
+      "archivos_texto_json\\Cubismo_Neoclasicismo_y_el_renacimiento.txt",
+      "archivos_texto_json\\Edição Completa - Revista Educação Continuada - vol 7 N5 MAI 2025.txt",
+      "archivos_texto_json\\El cubismo.txt",
+      "archivos_texto_json\\Manifiesto-del-Cubismo-1913.txt",
+      "archivos_texto_json\\Picasso - Ernesto Ballesteros Arranz.txt",
+      "archivos_texto_json\\cubismo-2.txt",
+      "archivos_texto_json\\manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt"
+    ],
+    "barroco": [
+      "archivos_texto_json\\16. Historia del Arte en la Edad Moderna. Renacimiento y Barroco autor Antonio Naval Mas.txt",
+      "archivos_texto_json\\Dialnet-SagrarioYManifestadorEnElRetabloBarrocoEspanol-233911.txt",
+      "archivos_texto_json\\Echeverria-Bolivar-La-Modernidad-De-Lo-Barroco.txt",
+      "archivos_texto_json\\El_Per├¡odo_Barroco.txt",
+      "archivos_texto_json\\QUE_ES_EL_BARROCO_1.txt",
+      "archivos_texto_json\\adminojs73-92.txt",
+      "archivos_texto_json\\el-espiritu-del-barroco-1261609.txt",
+      "archivos_texto_json\\gamedecaGestor_adelarevista05_L├│pezJ325-341-1.txt",
+      "archivos_texto_json\\manual-basico-de-historia-del-arte-m-pilar-de-la-pena-gomez-1529.txt"
+    ]
+  },
+  "preguntas": [
+    {
+      "tema": "cubismo",
+      "pregunta": "¿Qué es el cubismo?",
+      "precision": 0.5,
+      "recall": 0.286,
+      "f1": 0.364
+    },
+    {
+      "tema": "cubismo",
+      "pregunta": "Define el cubismo como movimiento artístico.",
+      "precision": 0.8,
+      "recall": 0.571,
+      "f1": 0.667
+    },
+    {
+      "tema": "cubismo",
+      "pregunta": "¿Cuáles son las características del cubismo?",
+      "precision": 0.5,
+      "recall": 0.286,
+      "f1": 0.364
+    },
+    {
+      "tema": "cubismo",
+      "pregunta": "¿Quiénes fundaron el cubismo y cuándo surgió?",
+      "precision": 0.667,
+      "recall": 0.571,
+      "f1": 0.615
+    },
+    {
+      "tema": "cubismo",
+      "pregunta": "¿En qué consiste la representación cubista de los objetos?",
+      "precision": 0.8,
+      "recall": 0.571,
+      "f1": 0.667
+    },
+    {
+      "tema": "barroco",
+      "pregunta": "¿Qué es el barroco?",
+      "precision": 0.75,
+      "recall": 0.333,
+      "f1": 0.462
+    },
+    {
+      "tema": "barroco",
+      "pregunta": "Define el arte barroco.",
+      "precision": 1.0,
+      "recall": 0.222,
+      "f1": 0.364
+    },
+    {
+      "tema": "barroco",
+      "pregunta": "¿Cuáles son las características del barroco?",
+      "precision": 1.0,
+      "recall": 0.444,
+      "f1": 0.615
+    },
+    {
+      "tema": "barroco",
+      "pregunta": "¿Cuándo surgió el barroco y qué lo caracteriza?",
+      "precision": 0.75,
+      "recall": 0.333,
+      "f1": 0.462
+    },
+    {
+      "tema": "barroco",
+      "pregunta": "¿Qué significa el término barroco?",
+      "precision": 0.5,
+      "recall": 0.111,
+      "f1": 0.182
+    }
+  ],
+  "promedio": {
+    "precision": 0.727,
+    "recall": 0.373,
+    "f1": 0.476
+  },
+  "robustez_jaccard": {
+    "cubismo": 0.412,
+    "barroco": 0.4
+  },
+  "timestamp": "2026-11-13T11:27:17.923647",
+  "config": {
+    "RAG_CHUNK_SIZE": 384,
+    "RAG_CHUNK_OVERLAP": 192,
+    "RAG_TOP_K": 10,
+    "RAG_EMBEDDING_MODEL": "paraphrase-multilingual-mpnet-base-v2",
+    "Total_Chunks": 17000
+  }
+}

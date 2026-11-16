@@ -1,0 +1,69 @@
+{
+  "comparacion": {
+    "cubismo": {
+      "antes": {
+        "documentos_indexados": 2,
+        "precision": 0.143,
+        "recall": 0.5,
+        "f1": 0.222,
+        "estado": "COLAPSADO"
+      },
+      "despues": {
+        "documentos_indexados": 7,
+        "precision": 0.72,
+        "recall": 0.628,
+        "f1": 0.667,
+        "estado": "FUNCIONAL"
+      },
+      "mejora": {
+        "documentos": "+250%",
+        "precision": "+403%",
+        "recall": "+26%",
+        "f1": "+200%"
+      }
+    },
+    "barroco": {
+      "antes": {
+        "documentos_indexados": 9,
+        "precision": 0.536,
+        "recall": 0.555,
+        "f1": 0.465,
+        "estado": "DEGRADADO"
+      },
+      "despues": {
+        "documentos_indexados": 9,
+        "precision": 0.877,
+        "recall": 0.511,
+        "f1": 0.638,
+        "estado": "ESTABLE"
+      },
+      "mejora": {
+        "documentos": "0%",
+        "precision": "+64%",
+        "recall": "-8%",
+        "f1": "+37%"
+      }
+    },
+    "indice_general": {
+      "antes": {
+        "chunks_totales": 2000,
+        "archivos_indexados": 8,
+        "archivos_disponibles": 22,
+        "cobertura": "36%"
+      },
+      "despues": {
+        "chunks_totales": 4709,
+        "archivos_indexados": 22,
+        "archivos_disponibles": 22,
+        "cobertura": "100%"
+      },
+      "mejora": {
+        "chunks": "+135%",
+        "cobertura": "+178%"
+      }
+    }
+  },
+  "timestamp": "2026-11-13T09:33:53Z",
+  "solucion": "Rebuild completo del índice ChromaDB desde cero",
+  "status": "RESUELTO - Sistema funcional"
+}
