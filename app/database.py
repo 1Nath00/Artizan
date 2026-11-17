@@ -18,3 +18,8 @@ def get_session():
 def init_db():
     """Crea todas las tablas en la base de datos."""
     SQLModel.metadata.create_all(engine)
+
+    from app.categorias.service import seed_missing_categories
+
+    with Session(engine) as session:
+        seed_missing_categories(session)
