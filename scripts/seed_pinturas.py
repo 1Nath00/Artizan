@@ -24,10 +24,11 @@ from app.config import (
     CLOUDINARY_CLOUD_NAME,
     DATABASE_URL,
 )
+from app.categorias.models import Categoria  # noqa: F401 — needed for metadata
 from app.pinturas.models import Pintura  # noqa: F401 — needed for metadata
 
 DATASET_DIR = Path(__file__).parent.parent / "dataset"
-CATEGORIAS = ["Baroque", "Cubism"]
+CATEGORIAS = {"Baroque": "barroco", "Cubism": "cubismo"}
 
 # ── Cloudinary config ────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ cloudinary.config(
 _YEAR_RE = re.compile(r"-(\d{4})(?:\(\d+\)|(?:-\d+))*$")
 
 
-def parse_filename(filename: str, categoria: str) -> dict:
+def parse_filename(filename: str) -> dict:
     """Extract autor, nombre, año from a dataset filename.
 
     Format: <autor>_<nombre-pintura>[-<año>][optional-suffix].jpg
@@ -58,7 +59,7 @@ def parse_filename(filename: str, categoria: str) -> dict:
 
     if "_" not in base:
         nombre = base.replace("-", " ").title()
-        return {"autor": nombre, "nombre": nombre, "año": None, "categoria": categoria}
+        return {"autor": nombre, "nombre": nombre, "año": None}
 
     autor_raw, painting_raw = base.split("_", 1)
     autor = autor_raw.replace("-", " ").title()
@@ -72,7 +73,7 @@ def parse_filename(filename: str, categoria: str) -> dict:
         nombre_raw = painting_raw
 
     nombre = nombre_raw.replace("-", " ").replace("_", " ").title()
-    return {"autor": autor, "nombre": nombre, "año": año, "categoria": categoria}
+    return {"autor": autor, "nombre": nombre, "año": año}
 
 
 # ── Cloudinary upload ────────────────────────────────────────────────────────
@@ -115,14 +116,22 @@ def main() -> None:
     total_error = 0
 
     with Session(engine) as session:
-        for categoria in CATEGORIAS:
-            folder = DATASET_DIR / categoria
+        for folder_name, category_slug in CATEGORIAS.items():
+            folder = DATASET_DIR / folder_name
             if not folder.exists():
                 print(f"[WARN] Carpeta no encontrada: {folder}")
                 continue
 
+            category = session.exec(
+                select(Categoria).where(Categoria.slug == category_slug)
+            ).first()
+            if category is None or category.id is None:
+                raise RuntimeError(
+                    f"No existe la categoría con slug '{category_slug}' en la base de datos."
+                )
+
             files = sorted(folder.glob("*.jpg"))
-            print(f"\n── {categoria} ({len(files)} archivos) ──────────────────────────")
+            print(f"\n── {folder_name} ({len(files)} archivos) ──────────────────────────")
 
             for filepath in files:
                 filename = filepath.name
@@ -136,14 +145,14 @@ def main() -> None:
                     total_skip += 1
                     continue
 
-                parsed = parse_filename(filename, categoria)
+                parsed = parse_filename(filename)
                 try:
-                    url = upload_image(filepath, categoria)
+                    url = upload_image(filepath, folder_name)
                     pintura = Pintura(
                         autor=parsed["autor"],
                         nombre=parsed["nombre"],
                         año=parsed["año"],
-                        categoria=parsed["categoria"],
+                        categoria_id=category.id,
                         url_imagen=url,
                         filename_original=filename,
                     )
