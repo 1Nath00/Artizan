@@ -57,3 +57,30 @@ def login(login_data: LoginRequest, session: Session = Depends(get_session)):
 @router.get("/me", response_model=UserResponse)
 def read_current_user(current_user: User = Depends(get_current_active_user)):
     return current_user
+
+@router.get("/debug/chroma")
+def debug_chroma():
+    import os
+
+    print("CHROMA_PATH:", config.RAG_DB_DIR, flush=True)
+    print("Existe la ruta:", os.path.exists(config.RAG_DB_DIR), flush=True)
+
+    client = _client()
+
+    collections = client.list_collections()
+
+    result = {
+        "path": config.RAG_DB_DIR,
+        "exists": os.path.exists(config.RAG_DB_DIR),
+        "collections": [
+            {
+                "name": collection.name,
+                "count": collection.count()
+            }
+            for collection in collections
+        ]
+    }
+
+    print("Resultado ChromaDB:", result, flush=True)
+
+    return result

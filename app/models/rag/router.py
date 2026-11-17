@@ -87,33 +87,6 @@ async def evaluate_retrieval(k: int | None = None, current_user: User = Depends(
     except Exception as exc:
         raise _handle(exc, "Could not evaluate retrieval.") from exc
 
-@router.get("/debug/chroma")
-def debug_chroma():
-    import os
-
-    print("CHROMA_PATH:", config.RAG_DB_DIR, flush=True)
-    print("Existe la ruta:", os.path.exists(config.RAG_DB_DIR), flush=True)
-
-    client = _client()
-
-    collections = client.list_collections()
-
-    result = {
-        "path": config.RAG_DB_DIR,
-        "exists": os.path.exists(config.RAG_DB_DIR),
-        "collections": [
-            {
-                "name": collection.name,
-                "count": collection.count()
-            }
-            for collection in collections
-        ]
-    }
-
-    print("Resultado ChromaDB:", result, flush=True)
-
-    return result
-
 @router.get("/evaluate/gold")
 async def evaluate_gold(judge: bool = True, current_user: User = Depends(get_current_active_user)):
     """Run the gold question set: ROUGE, BLEU, semantic similarity, keywords, judge, abstention."""
