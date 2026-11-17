@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
+from app import config
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
 from app.auth.schemas import LoginRequest, Token, UserCreate, UserResponse
@@ -12,6 +13,7 @@ from app.auth.service import (
     get_user_by_username,
 )
 from app.database import get_session
+from app.models.rag.service import _client
 
 from app.middleware import logger
 
