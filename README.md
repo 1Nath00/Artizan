@@ -148,6 +148,63 @@ pytest tests/ -v
 
 ---
 
+## Importar las pinturas pendientes
+
+El importador procesa exclusivamente `dataset/Impressionism`, `dataset/Expressionism`
+y `dataset/Pop_Art`. Requiere el esquema migrado (`alembic upgrade head`), las
+categorías `impresionismo`, `expresionismo` y `pop-art`, y las variables
+`DATABASE_URL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` y
+`CLOUDINARY_API_SECRET`. No crea tablas ni categorías.
+
+Desde la raíz, en PowerShell:
+
+```powershell
+# Solo lectura: valida carpetas, categorías, nombres y conflictos.
+.\.venv\Scripts\python.exe scripts\seed_pinturas.py --dry-run
+
+# Carga real: consume cuota de Cloudinary.
+.\.venv\Scripts\python.exe scripts\seed_pinturas.py
+
+# QA: comprueba registros, metadatos y acceso HTTP a cada imagen, sin escribir.
+.\.venv\Scripts\python.exe scripts\seed_pinturas.py --verify-only
+```
+
+El dataset real usa `autor_nombre-pintura[-año].jpg`; se reconocen sufijos de
+duplicado como `-1900(2)-1`. Los archivos sin año se reportan como `SIN_ANIO`
+y se guardan con año `NULL`, sin inventar fechas. También se admite
+`nombrePintura-autor-año` cuando tiene exactamente tres partes; sin separador
+entre autor y título, nombres con más partes son ambiguos y se rechazan.
+
+`filename_original` sigue siendo único globalmente. Se conservan todos los
+registros existentes, incluidos Barroco y Cubismo. Una coincidencia con otra
+categoría se reporta sin modificarla. Si un nombre nuevo aparece en varias
+carpetas pendientes, se omiten **todas** sus copias como ambiguas. Por esta
+decisión, las copias conflictivas no se consideran cargables automáticamente.
+
+Cada carga usa un identificador estable en Cloudinary y `overwrite=False`.
+Antes de guardar se comprueba que la URL HTTPS responda correctamente con una
+imagen no vacía y cuyo SHA-256 coincida con el archivo local; tras guardar se
+relee el registro. Esta verificación descarga la imagen y consume transferencia.
+Las reejecuciones verifican
+los registros existentes sin duplicarlos ni cambiar metadatos. Ejecutar una sola
+instancia del importador a la vez.
+
+Ante un error individual, se informa el archivo y se continúa. Si falla el
+guardado, se intenta retirar únicamente una imagen cuya creación por ese intento
+se confirme mediante su contexto de Cloudinary; nunca se elimina una imagen
+preexistente. Si la escritura pudo haberse confirmado, se consulta antes de
+eliminar. Fallos de recuperación o respuestas de red perdidas requieren revisión:
+Cloudinary y la base de datos no comparten una transacción atómica. Los recursos
+conservados pueden recuperarse al reejecutar gracias al identificador estable.
+
+El resumen informa creadas, existentes, pendientes válidas (simulación),
+verificadas, sin año y errores. El código de salida es `1` si hubo errores,
+incluidos nombres inválidos, conflictos o registros faltantes en verificación.
+Las URLs deben ser accesibles con los permisos de entrega configurados; no se
+cambian permisos para sortear errores.
+
+---
+
 ## Notas sobre los modelos de IA
 
 - **CNN (ResNet-50)**: Los pesos se descargan automáticamente de PyTorch Hub la primera vez que se llama al endpoint `/models/cnn/classify`. Requiere `torch` y `torchvision`.
