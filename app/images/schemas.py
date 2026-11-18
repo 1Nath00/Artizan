@@ -11,6 +11,7 @@ class ImageResponse(BaseModel):
     categoria_id: Optional[int]
     titulo: Optional[str]
     descripcion: Optional[str]
+    confianza: Optional[float]
     estado: str
     created_at: datetime
 

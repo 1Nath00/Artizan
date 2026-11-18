@@ -76,3 +76,28 @@ def test_classify_requires_auth(client):
         files={"file": ("img.png", png, "image/png")},
     )
     assert resp.status_code == 401
+
+
+def test_classify_persists_categoria_and_confianza(client, auth_headers, db_session):
+    from sqlmodel import select
+
+    from app.categorias.models import Categoria
+
+    predictions = [
+        {"label": "Barroco", "confidence": 0.7712},
+        {"label": "Cubismo", "confidence": 0.2288},
+    ]
+    with patch("app.models.cnn.router.classify_image", return_value=predictions):
+        resp = client.post(
+            "/models/cnn/classify",
+            headers=auth_headers,
+            files={"file": ("obra.png", _make_png_bytes(), "image/png")},
+        )
+    assert resp.status_code == 200
+    image_id = resp.json()["image_id"]
+
+    detail = client.get(f"/images/{image_id}", headers=auth_headers).json()
+    barroco = db_session.exec(select(Categoria).where(Categoria.slug == "barroco")).first()
+    assert detail["categoria_id"] == barroco.id
+    assert detail["confianza"] == 0.7712
+    assert detail["estado"] == "clasificada"
