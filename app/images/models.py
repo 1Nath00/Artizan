@@ -19,6 +19,7 @@ class Image(SQLModel, table=True):
     )
     titulo: Optional[str] = Field(default=None, max_length=255, nullable=True)
     descripcion: Optional[str] = Field(default=None, nullable=True)
+    confianza: Optional[float] = Field(default=None, nullable=True)
     estado: str = Field(default="pendiente", max_length=20, nullable=False)
     created_at: datetime = created_at_field()
     updated_at: datetime = updated_at_field()

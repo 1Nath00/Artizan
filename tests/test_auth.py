@@ -44,8 +44,8 @@ def test_register_duplicate_email(client, registered_user):
 def test_login_success(client, registered_user):
     resp = client.post(
         "/auth/login",
-        data={
-            "username": registered_user["username"],
+        json={
+            "email": registered_user["email"],
             "password": registered_user["password"],
         },
     )
@@ -58,7 +58,7 @@ def test_login_success(client, registered_user):
 def test_login_wrong_password(client, registered_user):
     resp = client.post(
         "/auth/login",
-        data={"username": registered_user["username"], "password": "wrongpassword"},
+        json={"email": registered_user["email"], "password": "wrongpassword"},
     )
     assert resp.status_code == 401
 

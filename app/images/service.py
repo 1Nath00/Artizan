@@ -20,6 +20,7 @@ from app.config import (
     MAX_IMAGE_SIZE_MB,
 )
 from app.categorias.models import Categoria
+from app.categorias.service import resolve_categoria_id_for_label
 from app.images.models import Image
 from app.models.cnn.model import classify_image
 
@@ -65,6 +66,7 @@ def _persist_image(
     categoria_id: int | None = None,
     titulo: str | None = None,
     descripcion: str | None = None,
+    confianza: float | None = None,
     estado: str = "pendiente",
 ) -> Image:
     if categoria_id is not None and session.get(Categoria, categoria_id) is None:
@@ -101,6 +103,7 @@ def _persist_image(
         categoria_id=categoria_id,
         titulo=titulo,
         descripcion=descripcion,
+        confianza=confianza,
         estado=estado,
     )
     session.add(image)
@@ -146,13 +149,21 @@ async def analyze_image(
         asyncio.to_thread(detect_objects_from_bytes, content, conf),
     )
 
-    top_prediction = predictions[0]["label"] if predictions else None
+    # Categoría y confianza del MISMO resultado top-1; si la etiqueta no
+    # mapea a una categoría existente, ambos quedan en None.
+    top_prediction = predictions[0] if predictions else None
+    categoria_id = (
+        resolve_categoria_id_for_label(session, top_prediction["label"]) if top_prediction else None
+    )
+    confianza = top_prediction["confidence"] if top_prediction and categoria_id is not None else None
     image = _persist_image(
         content,
         ext,
         session,
         usuario_id=usuario_id,
-        titulo=top_prediction,
+        categoria_id=categoria_id,
+        titulo=top_prediction["label"] if top_prediction else None,
+        confianza=confianza,
         estado="clasificada",
     )
     return image, predictions, detections

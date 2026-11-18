@@ -22,9 +22,10 @@ def test_upload_image(client, auth_headers):
     )
     assert resp.status_code == 201
     data = resp.json()
-    assert data["original_name"] == "test.png"
-    assert data["content_type"] == "image/png"
-    assert "url" in data
+    assert data["id"] is not None
+    assert data["imagen_url"]
+    assert data["estado"] == "pendiente"
+    assert data["confianza"] is None
 
 
 def test_upload_invalid_extension(client, auth_headers):
@@ -120,3 +121,64 @@ def test_delete_image(client, auth_headers):
 def test_images_require_auth(client):
     resp = client.get("/images/")
     assert resp.status_code == 401
+
+
+def _analyze_with_mock_predictions(client, auth_headers, predictions):
+    with patch("app.images.service.classify_image", return_value=predictions), patch(
+        "app.images.service.detect_objects_from_bytes", return_value=[]
+    ):
+        return client.post(
+            "/images/analyze",
+            headers=auth_headers,
+            files={"file": ("obra.png", _make_png_bytes(), "image/png")},
+        )
+
+
+def _get_categoria_id(db_session, slug):
+    from sqlmodel import select
+
+    from app.categorias.models import Categoria
+
+    return db_session.exec(select(Categoria).where(Categoria.slug == slug)).first().id
+
+
+def test_analyze_persists_cubismo_categoria_and_confianza(client, auth_headers, db_session):
+    resp = _analyze_with_mock_predictions(
+        client,
+        auth_headers,
+        [{"label": "Cubismo", "confidence": 0.9134}, {"label": "Barroco", "confidence": 0.0866}],
+    )
+    assert resp.status_code == 201
+    image_id = resp.json()["image_id"]
+
+    detail = client.get(f"/images/{image_id}", headers=auth_headers).json()
+    assert detail["categoria_id"] == _get_categoria_id(db_session, "cubismo")
+    assert detail["confianza"] == 0.9134
+    assert detail["estado"] == "clasificada"
+
+
+def test_analyze_persists_barroco_categoria_and_confianza(client, auth_headers, db_session):
+    resp = _analyze_with_mock_predictions(
+        client,
+        auth_headers,
+        [{"label": "Barroco", "confidence": 0.7712}, {"label": "Cubismo", "confidence": 0.2288}],
+    )
+    assert resp.status_code == 201
+    image_id = resp.json()["image_id"]
+
+    detail = client.get(f"/images/{image_id}", headers=auth_headers).json()
+    assert detail["categoria_id"] == _get_categoria_id(db_session, "barroco")
+    assert detail["confianza"] == 0.7712
+
+
+def test_analyze_unknown_label_persists_without_categoria(client, auth_headers):
+    resp = _analyze_with_mock_predictions(
+        client, auth_headers, [{"label": "tabby cat", "confidence": 0.99}]
+    )
+    assert resp.status_code == 201
+    image_id = resp.json()["image_id"]
+
+    detail = client.get(f"/images/{image_id}", headers=auth_headers).json()
+    assert detail["categoria_id"] is None
+    assert detail["confianza"] is None
+    assert detail["titulo"] == "tabby cat"
