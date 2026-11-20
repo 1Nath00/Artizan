@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
+from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
 from app.core.timestamps import created_at_field, updated_at_field
@@ -19,6 +20,11 @@ class Image(SQLModel, table=True):
     )
     titulo: Optional[str] = Field(default=None, max_length=255, nullable=True)
     descripcion: Optional[str] = Field(default=None, nullable=True)
+    confianza: Optional[float] = Field(default=None, nullable=True)
+    detecciones: Optional[list[dict[str, Any]]] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
     estado: str = Field(default="pendiente", max_length=20, nullable=False)
     created_at: datetime = created_at_field()
     updated_at: datetime = updated_at_field()

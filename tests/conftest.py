@@ -2,45 +2,35 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
-from app.database import Base, get_db
+from app.categorias.service import seed_missing_categories
+from app.database import get_session
 from app.main import app
 
-TEST_DATABASE_URL = "sqlite:///:memory:"
-
-engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
+engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 
 
 @pytest.fixture()
 def db_session():
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-    yield session
-    session.close()
-    transaction.rollback()
-    connection.close()
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        seed_missing_categories(session)
+        yield session
+    SQLModel.metadata.drop_all(engine)
 
 
 @pytest.fixture()
 def client(db_session):
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
+    def override_get_session():
+        yield db_session
 
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_session] = override_get_session
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -59,8 +49,8 @@ def auth_headers(client, registered_user):
     """Return Authorization headers for the registered user."""
     resp = client.post(
         "/auth/login",
-        data={
-            "username": registered_user["username"],
+        json={
+            "email": registered_user["email"],
             "password": registered_user["password"],
         },
     )

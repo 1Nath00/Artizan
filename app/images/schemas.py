@@ -4,6 +4,13 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class StoredDetection(BaseModel):
+    clase_original: str
+    clase_es: Optional[str]
+    confianza: float
+    bbox: list[float]
+
+
 class ImageResponse(BaseModel):
     id: int
     usuario_id: int
@@ -11,6 +18,8 @@ class ImageResponse(BaseModel):
     categoria_id: Optional[int]
     titulo: Optional[str]
     descripcion: Optional[str]
+    confianza: Optional[float]
+    detecciones: Optional[list["StoredDetection"]] = None
     estado: str
     created_at: datetime
 
@@ -34,10 +43,10 @@ class Detection(BaseModel):
     confianza: float
     bbox: list[float]
 
-
 class AnalyzeResponse(BaseModel):
     image_id: int
     imagen_url: str
     predictions: list[Prediction]
     detections: list[Detection]
+    detecciones: Optional[list[StoredDetection]] = None
 
