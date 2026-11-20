@@ -94,6 +94,23 @@ UPLOAD_DIR=uploads
 MAX_IMAGE_SIZE_MB=10
 ```
 
+### Despliegue del detector YOLO en Railway
+
+El archivo `yolo11n.pt` debe formar parte del despliegue; por defecto se busca
+en la raíz del proyecto usando una ruta absoluta. El archivo está permitido
+explícitamente en `.gitignore`, por lo que debe agregarse al commit:
+
+```bash
+git add yolo11n.pt
+git commit -m "Include YOLO model weights"
+git push
+```
+
+Si los pesos se almacenan fuera del repositorio, configure `YOLO_MODEL_PATH`
+con la ruta absoluta dentro del contenedor. El modelo se carga bajo demanda una
+sola vez, por lo que una ausencia o ruta incorrecta no impide arrancar la API,
+pero sí produce un error explícito al intentar detectar objetos.
+
 ---
 
 ## Endpoints principales

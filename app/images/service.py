@@ -6,7 +6,6 @@ from pathlib import Path
 
 import cloudinary
 import cloudinary.uploader
-from ultralytics import YOLO
 import httpx
 from PIL import Image as PILImage
 import io
@@ -23,6 +22,7 @@ from app.config import (
 from app.categorias.models import Categoria
 from app.categorias.service import resolve_categoria_id_for_label
 from app.images.models import Image
+from app.images.yolo_loader import get_yolo_model
 from app.models.cnn.model import classify_image
 
 MAX_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
@@ -113,8 +113,6 @@ COCO_LABELS_ES = {
 }
 
 logger = logging.getLogger(__name__)
-
-model: YOLO = YOLO("yolo11n.pt")
 
 cloudinary.config(
     cloud_name=CLOUDINARY_CLOUD_NAME,
@@ -337,6 +335,7 @@ def delete_image(session: Session, image_id: int, usuario_id: int) -> bool:
 
 def detect_objects_from_bytes(image_bytes: bytes, conf: float = 0.25) -> list[dict]:
     img = PILImage.open(io.BytesIO(image_bytes)).convert("RGB")
+    model = get_yolo_model()
     results = model(img, conf=conf)
     detections = []
     for r in results:
