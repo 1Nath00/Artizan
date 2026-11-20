@@ -2,27 +2,16 @@ from __future__ import annotations
 
 import io
 import numpy as np
-from functools import lru_cache
 from typing import Any
-import os
+from app.model_loader import get_keras_model
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "modelo_pinturas_gridsearch.keras")
 
-@lru_cache(maxsize=1)
-def _load_model():
-    import tensorflow as tf
-    
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("Input shape del modelo:", model.input_shape)
-
-    categories = ["Barroco", "Cubismo"] 
-
-    return model, categories
+CATEGORIES = ["Barroco", "Cubismo"]
 
 def classify_image(image_bytes: bytes, top_k: int = 5) -> list[dict[str, Any]]:
     from PIL import Image
-    model, categories = _load_model()
+    model = get_keras_model()
+    categories = CATEGORIES
 
     IMG_HEIGHT, IMG_WIDTH = 224, 224
 
