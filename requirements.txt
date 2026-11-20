@@ -24,3 +24,4 @@ sentence-transformers>=3.0.0
 email-validator>=2.0
 ultralytics==8.4.160
 opencv-python-headless==5.0.0.93
+psycopg[binary]>=3.1.0
