@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import uuid
 from pathlib import Path
 
@@ -26,6 +27,90 @@ from app.models.cnn.model import classify_image
 
 MAX_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 UPLOADS_DIR = Path("uploads")
+DETECTION_CONFIDENCE_THRESHOLD = 0.5
+
+COCO_LABELS_ES = {
+    "person": "persona",
+    "bicycle": "bicicleta",
+    "car": "automóvil",
+    "motorcycle": "motocicleta",
+    "airplane": "avión",
+    "bus": "autobús",
+    "train": "tren",
+    "truck": "camión",
+    "boat": "barco",
+    "traffic light": "semáforo",
+    "fire hydrant": "hidrante",
+    "stop sign": "señal de alto",
+    "parking meter": "parquímetro",
+    "bench": "banco",
+    "bird": "pájaro",
+    "cat": "gato",
+    "dog": "perro",
+    "horse": "caballo",
+    "sheep": "oveja",
+    "cow": "vaca",
+    "elephant": "elefante",
+    "bear": "oso",
+    "zebra": "cebra",
+    "giraffe": "jirafa",
+    "backpack": "mochila",
+    "umbrella": "paraguas",
+    "handbag": "bolso",
+    "tie": "corbata",
+    "suitcase": "maleta",
+    "frisbee": "disco volador",
+    "skis": "esquís",
+    "snowboard": "tabla de snowboard",
+    "sports ball": "balón",
+    "kite": "cometa",
+    "baseball bat": "bate de béisbol",
+    "baseball glove": "guante de béisbol",
+    "skateboard": "monopatín",
+    "surfboard": "tabla de surf",
+    "tennis racket": "raqueta de tenis",
+    "bottle": "botella",
+    "wine glass": "copa",
+    "cup": "taza",
+    "fork": "tenedor",
+    "knife": "cuchillo",
+    "spoon": "cuchara",
+    "bowl": "tazón",
+    "banana": "plátano",
+    "apple": "manzana",
+    "sandwich": "sándwich",
+    "orange": "naranja",
+    "broccoli": "brócoli",
+    "carrot": "zanahoria",
+    "hot dog": "perro caliente",
+    "pizza": "pizza",
+    "donut": "dona",
+    "cake": "pastel",
+    "chair": "silla",
+    "couch": "sofá",
+    "potted plant": "planta en maceta",
+    "bed": "cama",
+    "dining table": "mesa de comedor",
+    "toilet": "inodoro",
+    "tv": "televisor",
+    "laptop": "computadora portátil",
+    "mouse": "ratón",
+    "remote": "control remoto",
+    "keyboard": "teclado",
+    "cell phone": "teléfono celular",
+    "microwave": "microondas",
+    "oven": "horno",
+    "toaster": "tostadora",
+    "sink": "fregadero",
+    "refrigerator": "refrigerador",
+    "book": "libro",
+    "clock": "reloj",
+    "vase": "jarrón",
+    "scissors": "tijeras",
+    "teddy bear": "oso de peluche",
+    "hair drier": "secador de pelo",
+    "toothbrush": "cepillo de dientes",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +153,7 @@ def _persist_image(
     descripcion: str | None = None,
     confianza: float | None = None,
     estado: str = "pendiente",
+    detecciones: list[dict] | None = None,
 ) -> Image:
     if categoria_id is not None and session.get(Categoria, categoria_id) is None:
         raise HTTPException(
@@ -104,6 +190,7 @@ def _persist_image(
         titulo=titulo,
         descripcion=descripcion,
         confianza=confianza,
+        detecciones=detecciones,
         estado=estado,
     )
     session.add(image)
@@ -156,6 +243,7 @@ async def analyze_image(
         resolve_categoria_id_for_label(session, top_prediction["label"]) if top_prediction else None
     )
     confianza = top_prediction["confidence"] if top_prediction and categoria_id is not None else None
+    stored_detections = normalize_detections(detections)
     image = _persist_image(
         content,
         ext,
@@ -165,6 +253,7 @@ async def analyze_image(
         titulo=top_prediction["label"] if top_prediction else None,
         confianza=confianza,
         estado="clasificada",
+        detecciones=stored_detections,
     )
     return image, predictions, detections
 
@@ -178,6 +267,54 @@ def list_images(session: Session, usuario_id: int | None = None) -> list[Image]:
 
 def get_image(session: Session, image_id: int) -> Image | None:
     return session.get(Image, image_id)
+
+
+def normalize_detections(detections: list[dict]) -> list[dict]:
+    """Translate COCO labels, filter low-confidence objects and keep each class once."""
+    best_by_class: dict[str, dict] = {}
+    for detection in detections:
+        original_label = detection.get("clase")
+        if not isinstance(original_label, str) or not original_label.strip():
+            raise ValueError("A detection must contain a non-empty class label.")
+
+        try:
+            confidence = float(detection["confianza"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("A detection must contain a numeric confidence.") from exc
+        if not math.isfinite(confidence) or not 0 <= confidence <= 1:
+            raise ValueError("Detection confidence must be between 0 and 1.")
+        if confidence < DETECTION_CONFIDENCE_THRESHOLD:
+            continue
+
+        bbox = detection.get("bbox")
+        if not isinstance(bbox, list) or any(
+            not isinstance(coordinate, (int, float)) or not math.isfinite(coordinate)
+            for coordinate in bbox
+        ):
+            raise ValueError("A detection must contain a numeric bounding box.")
+
+        normalized_label = " ".join(original_label.casefold().split())
+        candidate = {
+            "clase_original": original_label.strip(),
+            "clase_es": COCO_LABELS_ES.get(normalized_label),
+            "confianza": confidence,
+            "bbox": bbox,
+        }
+        current = best_by_class.get(normalized_label)
+        if current is None or confidence > current["confianza"]:
+            best_by_class[normalized_label] = candidate
+
+    return sorted(best_by_class.values(), key=lambda item: -item["confianza"])
+
+
+def persist_detections(session: Session, image: Image, detections: list[dict]) -> list[dict]:
+    """Replace the stored detections for one image after a successful YOLO run."""
+    normalized = normalize_detections(detections)
+    image.detecciones = normalized
+    session.add(image)
+    session.commit()
+    session.refresh(image)
+    return normalized
 
 
 def delete_image(session: Session, image_id: int, usuario_id: int) -> bool:
@@ -213,11 +350,18 @@ def detect_objects_from_bytes(image_bytes: bytes, conf: float = 0.25) -> list[di
 
 
 def detect_objects(image_url: str, conf: float = 0.25) -> list[dict]:
-    response = httpx.get(image_url, timeout=10.0, follow_redirects=True)
-    response.raise_for_status()
+    if image_url.startswith(("http://", "https://")):
+        response = httpx.get(image_url, timeout=10.0, follow_redirects=True)
+        response.raise_for_status()
 
-    content_type = response.headers.get("content-type", "")
-    if not content_type.startswith("image/"):
-        raise ValueError(f"La URL no devolvió una imagen válida (content-type={content_type})")
+        content_type = response.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            raise ValueError(f"La URL no devolvió una imagen válida (content-type={content_type})")
+        image_bytes = response.content
+    else:
+        file_path = Path(image_url)
+        if not file_path.is_file():
+            raise FileNotFoundError(f"Stored image file not found: {image_url}")
+        image_bytes = file_path.read_bytes()
 
-    return detect_objects_from_bytes(response.content, conf=conf)
+    return detect_objects_from_bytes(image_bytes, conf=conf)

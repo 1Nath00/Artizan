@@ -7,10 +7,12 @@ from sqlmodel import Session
 
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
+from app.categorias.models import Categoria
 from app.database import get_session
 from app.images import service
 from app.middleware import logger as request_logger
 from app.images.schemas import AnalyzeResponse, ImageResponse
+from app.models.rag import service as rag_service
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -71,7 +73,7 @@ async def analyze_image(
             top_k=top_k,
             conf=conf,
         )
-    except (UnidentifiedImageError, OSError, RuntimeError) as exc:
+    except (UnidentifiedImageError, OSError, RuntimeError, ValueError) as exc:
         request_logger.exception("Image analysis failed")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -88,6 +90,7 @@ async def analyze_image(
         imagen_url=image.imagen_url,
         predictions=predictions,
         detections=detections,
+        detecciones=image.detecciones,
     )
 
 
@@ -157,6 +160,12 @@ def detect_image(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Could not download the stored image",
         ) from exc
+    except ValueError as exc:
+        request_logger.exception("Stored image is invalid")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not process the stored image.",
+        ) from exc
     except (UnidentifiedImageError, OSError, RuntimeError) as exc:
         request_logger.exception("Stored image processing failed")
         raise HTTPException(
@@ -164,7 +173,82 @@ def detect_image(
             detail="Could not process the stored image.",
         ) from exc
 
-    return {"detections": detections}
+    stored_detections = service.persist_detections(session, image, detections)
+    return {"detections": detections, "detecciones": stored_detections}
+
+
+@router.post("/{image_id}/description", response_model=ImageResponse)
+def generate_image_description(
+    image_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+):
+    image = service.get_image(session, image_id)
+    if not image:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    if image.usuario_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    if image.detecciones is None:
+        try:
+            detections = service.detect_objects(image.imagen_url)
+        except FileNotFoundError as exc:
+            request_logger.exception("Stored image file not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The stored image file was not found",
+            ) from exc
+        except httpx.HTTPError as exc:
+            request_logger.exception("Stored image download failed")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Could not download the stored image",
+            ) from exc
+        except ValueError as exc:
+            request_logger.exception("Stored image is invalid")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not process the stored image.",
+            ) from exc
+        except (UnidentifiedImageError, OSError, RuntimeError) as exc:
+            request_logger.exception("Stored image processing failed")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not process the stored image.",
+            ) from exc
+        stored_detections = service.persist_detections(session, image, detections)
+    else:
+        stored_detections = image.detecciones
+
+    category = session.get(Categoria, image.categoria_id) if image.categoria_id is not None else None
+    try:
+        result = rag_service.describe_image(
+            style=category.nombre if category else None,
+            confidence=image.confianza,
+            detections=stored_detections or [],
+        )
+    except rag_service.InsufficientContextError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except rag_service.RAGError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        request_logger.exception("Image description generation failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not generate an image description.",
+        ) from exc
+
+    image.descripcion = result["answer"]
+    session.add(image)
+    session.commit()
+    session.refresh(image)
+    return image
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_image(

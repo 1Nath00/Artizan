@@ -109,8 +109,10 @@ MAX_IMAGE_SIZE_MB=10
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | POST | `/images/upload` | Subir una imagen |
+| POST | `/images/analyze` | Subir imagen y ejecutar clasificación y detección |
 | GET | `/images/` | Listar imágenes propias |
 | GET | `/images/{id}` | Obtener metadata de una imagen |
+| POST | `/images/{id}/description` | Generar y guardar la descripción RAG de una imagen |
 | GET | `/images/{id}/file` | Descargar el archivo de imagen |
 | DELETE | `/images/{id}` | Eliminar una imagen |
 
