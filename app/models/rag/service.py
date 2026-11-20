@@ -55,6 +55,47 @@ Tu única fuente de verdad es el CONTEXTO proporcionado.
 # FORMATO
 Respuesta en párrafos (3-8 oraciones), cita al final de cada idea: [número]."""
 
+INSUFFICIENT_CONTEXT_ANSWER = "No encuentro información suficiente en los documentos."
+LOW_CONFIDENCE_CAUTION = (
+    "La clasificación del estilo es incierta; considera la descripción con cautela."
+)
+IMAGE_DESCRIPTION_SYSTEM_PROMPT = f"""# ROL
+Eres un profesor experto en historia del arte y describes imágenes con rigor.
+
+# TAREA
+Describe el estilo artístico clasificado usando el CONTEXTO. Separa claramente
+los hechos históricos de las observaciones visuales.
+
+# JERARQUÍA DE FUENTES
+- El CONTEXTO es la única fuente para afirmaciones históricas o artísticas.
+- Los DATOS DE LA IMAGEN solo respaldan observaciones visuales.
+
+# USO DE LOS DATOS DE LA IMAGEN
+- El estilo y su confianza son resultados de clasificación, no hechos históricos.
+- Los objetos detectados son pistas visuales, no certezas absolutas.
+- Puedes mencionar objetos observados sin cita, pero no deduzcas de ellos hechos
+  históricos, simbólicos ni una relación con un estilo.
+- Relaciona un objeto con un estilo únicamente si el CONTEXTO respalda esa relación.
+- Si no hay objetos válidos, describe únicamente el estilo.
+
+# RESTRICCIONES
+- Cada afirmación histórica o artística debe respaldarse con citas [n] existentes
+  en el CONTEXTO.
+- No inventes fechas, artistas, obras, lugares, períodos ni significados.
+- No uses los datos visuales para completar información histórica ausente.
+- Si la confianza de clasificación es inferior a 0.6, inicia exactamente con:
+  "{LOW_CONFIDENCE_CAUTION}"
+- Si el estilo no está clasificado o el CONTEXTO no es suficiente, responde
+  exactamente: "{INSUFFICIENT_CONTEXT_ANSWER}". Esta regla tiene prioridad sobre
+  cualquier otra instrucción de formato.
+- Responde en español claro y conciso.
+
+# EJEMPLO
+DATOS DE LA IMAGEN: estilo Cubismo, confianza 0.82; objetos: persona, silla.
+CONTEXTO: [1] El Cubismo representa formas mediante planos geométricos.
+Respuesta: En la imagen se detectan una persona y una silla. El Cubismo representa
+formas mediante planos geométricos [1]."""
+
 _index_lock = threading.Lock()
 _LEXICAL_STOP_WORDS = frozenset(
     "a al algo como con cual cuales cuando de del desde donde el en es esta fue ha "
@@ -64,6 +105,10 @@ _LEXICAL_STOP_WORDS = frozenset(
 
 class RAGError(Exception):
     """Raised for expected RAG failures (no index, LLM unavailable, ...)."""
+
+
+class InsufficientContextError(RAGError):
+    """Raised when image description cannot be grounded in retrieved documents."""
 
 
 # ---------- Document reading ----------
@@ -372,7 +417,7 @@ def retrieve(
     return ranked_hits[:k]
 
 
-def build_messages(question: str, hits: list[dict[str, Any]]) -> list[dict[str, str]]:
+def _format_context(hits: list[dict[str, Any]]) -> str:
     # Group fragments by document for better context
     by_document: dict[str, list[tuple[int, str]]] = {}
     for i, h in enumerate(hits, 1):
@@ -389,9 +434,12 @@ def build_messages(question: str, hits: list[dict[str, Any]]) -> list[dict[str, 
         
         for fragment_num, text in fragments:
             context_parts.append(f"[{fragment_num}] {text}")
-    
-    context = "\n\n".join(context_parts)
-    
+
+    return "\n\n".join(context_parts)
+
+
+def build_messages(question: str, hits: list[dict[str, Any]]) -> list[dict[str, str]]:
+    context = _format_context(hits)
     user = f"""# CONTEXTO
 {context}
 
@@ -407,37 +455,128 @@ def build_messages(question: str, hits: list[dict[str, Any]]) -> list[dict[str, 
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
 
 
-def ask(question: str, k: int | None = None) -> dict[str, Any]:
-    t0 = time.time()
-    t_embed = time.time()
-    hits = retrieve(question, k)
-    t_retrieval = time.time() - t_embed
-    
+def build_image_description_messages(
+    style: str,
+    confidence: float | None,
+    detections: list[dict[str, Any]],
+    hits: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    objects = [
+        detection["clase_es"]
+        for detection in detections
+        if detection.get("clase_es")
+    ]
+    confidence_text = f"{confidence:.4f}" if confidence is not None else "no disponible"
+    image_data = (
+        f"Estilo clasificado: {style}\n"
+        f"Confianza de clasificación: {confidence_text}\n"
+        f"Objetos detectados (pistas visuales): "
+        f"{', '.join(objects) if objects else 'ninguno válido'}"
+    )
+    user = f"""# DATOS DE LA IMAGEN
+{image_data}
+
+# CONTEXTO
+{_format_context(hits)}
+
+# INSTRUCCIÓN
+Describe el estilo usando exclusivamente las afirmaciones artísticas respaldadas
+por el CONTEXTO y sus citas. Puedes describir los objetos como observaciones
+visuales, sin atribuirles significados o relaciones que no aparezcan en el CONTEXTO."""
+    return [
+        {"role": "system", "content": IMAGE_DESCRIPTION_SYSTEM_PROMPT},
+        {"role": "user", "content": user},
+    ]
+
+
+def _generate_answer(messages: list[dict[str, str]]) -> tuple[str, float]:
     try:
         import ollama
 
         t_llm = time.time()
         response = ollama.Client(host=config.OLLAMA_HOST).chat(
             model=config.RAG_LLM_MODEL,
-            messages=build_messages(question, hits),
+            messages=messages,
             options={"temperature": config.RAG_TEMPERATURE, "num_ctx": config.RAG_NUM_CTX},
         )
-        t_llm = time.time() - t_llm
     except Exception as exc:
         raise RAGError(
-            f"Could not reach Ollama at {config.OLLAMA_HOST} with model '{config.RAG_LLM_MODEL}'. "
-            f"Make sure `ollama serve` is running and the model is pulled. Cause: {type(exc).__name__}: {exc}"
+            f"Could not reach Ollama at {config.OLLAMA_HOST} with model "
+            f"'{config.RAG_LLM_MODEL}'. Make sure `ollama serve` is running and "
+            f"the model is pulled. Cause: {type(exc).__name__}: {exc}"
         ) from exc
-    
+
+    latency = time.time() - t_llm
+    try:
+        answer = response["message"]["content"].strip()
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise RAGError("Ollama returned an invalid response.") from exc
+    if not answer:
+        raise RAGError("Ollama returned an empty response.")
+    return answer, latency
+
+
+def ask(question: str, k: int | None = None) -> dict[str, Any]:
+    t0 = time.time()
+    t_embed = time.time()
+    hits = retrieve(question, k)
+    t_retrieval = time.time() - t_embed
+    answer, t_llm = _generate_answer(build_messages(question, hits))
+
     return {
         "question": question,
-        "answer": response["message"]["content"].strip(),
+        "answer": answer,
         "sources": hits,
         "latency": round(time.time() - t0, 2),
         "latency_breakdown": {
             "retrieval_ms": round(t_retrieval * 1000, 0),
             "llm_ms": round(t_llm * 1000, 0),
         }
+    }
+
+
+def describe_image(
+    style: str | None,
+    confidence: float | None,
+    detections: list[dict[str, Any]],
+    k: int | None = None,
+) -> dict[str, Any]:
+    if not style:
+        raise InsufficientContextError(INSUFFICIENT_CONTEXT_ANSWER)
+
+    objects = [item["clase_es"] for item in detections if item.get("clase_es")]
+    object_context = f" Objetos observados: {', '.join(objects)}." if objects else ""
+    question = (
+        f"Estilo artístico: {style}.{object_context} "
+        f"Explica las características y representación documentadas del estilo."
+    )
+    started_at = time.time()
+    retrieval_started_at = time.time()
+    hits = retrieve(question, k)
+    retrieval_latency = time.time() - retrieval_started_at
+    if not hits:
+        raise InsufficientContextError(INSUFFICIENT_CONTEXT_ANSWER)
+
+    messages = build_image_description_messages(style, confidence, detections, hits)
+    answer, generation_latency = _generate_answer(messages)
+    if answer.startswith(INSUFFICIENT_CONTEXT_ANSWER):
+        raise InsufficientContextError(INSUFFICIENT_CONTEXT_ANSWER)
+
+    if confidence is not None and confidence < 0.6 and not answer.startswith(LOW_CONFIDENCE_CAUTION):
+        answer = f"{LOW_CONFIDENCE_CAUTION} {answer}"
+
+    citations = [int(citation) for citation in re.findall(r"\[(\d+)\]", answer)]
+    if not citations or any(citation < 1 or citation > len(hits) for citation in citations):
+        raise RAGError("Generated description did not contain valid context citations.")
+
+    return {
+        "answer": answer,
+        "sources": hits,
+        "latency": round(time.time() - started_at, 2),
+        "latency_breakdown": {
+            "retrieval_ms": round(retrieval_latency * 1000, 0),
+            "llm_ms": round(generation_latency * 1000, 0),
+        },
     }
 
 
