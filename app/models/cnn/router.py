@@ -11,6 +11,7 @@ from sqlmodel import Session
 
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
+from app.categorias.service import resolve_categoria_id_for_label
 from app.config import CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME
 from app.database import get_session
 from app.images.models import Image
@@ -98,11 +99,19 @@ async def classify(
     else:
         logger.warning("CLOUDINARY_CLOUD_NAME is not set, skipping Cloudinary upload")
 
-    top_prediction = results[0]["label"] if results else None
+    # Categoría y confianza del MISMO resultado top-1; si la etiqueta no
+    # mapea a una categoría existente, ambos quedan en None.
+    top_prediction = results[0] if results else None
+    categoria_id = (
+        resolve_categoria_id_for_label(session, top_prediction["label"]) if top_prediction else None
+    )
+    confianza = top_prediction["confidence"] if top_prediction and categoria_id is not None else None
     image = Image(
         usuario_id=current_user.id,
         imagen_url=imagen_url,
-        titulo=top_prediction,
+        categoria_id=categoria_id,
+        titulo=top_prediction["label"] if top_prediction else None,
+        confianza=confianza,
         estado="clasificada",
     )
     session.add(image)
