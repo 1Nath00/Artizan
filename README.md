@@ -137,6 +137,7 @@ pero sí produce un error explícito al intentar detectar objetos.
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | `/pinturas/` | Listar pinturas, con filtros opcionales por ID de categoría y nombre de autor |
+| GET | `/pinturas/search?q=texto` | Buscar pinturas por nombre, autor o categoría |
 | GET | `/pinturas/categoria/{slug}` | Listar pinturas de una categoría identificada por su slug |
 | GET | `/pinturas/{id}` | Obtener una pintura por ID |
 

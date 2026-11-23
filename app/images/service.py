@@ -260,6 +260,7 @@ def list_images(session: Session, usuario_id: int | None = None) -> list[Image]:
     statement = select(Image)
     if usuario_id is not None:
         statement = statement.where(Image.usuario_id == usuario_id)
+    statement = statement.order_by(Image.created_at.desc(), Image.id.desc())
     return list(session.exec(statement).all())
 
 

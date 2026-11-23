@@ -1,8 +1,10 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
+from app.categorias.models import Categoria
 from app.categorias.service import get_categoria_by_slug
 from app.database import get_session
 from app.pinturas.models import Pintura
@@ -24,6 +26,35 @@ def list_pinturas(
     if autor:
         query = query.where(Pintura.autor.ilike(f"%{autor}%"))
     query = query.offset(skip).limit(limit)
+    return session.exec(query).all()
+
+
+@router.get("/search", response_model=List[Pintura])
+def search_pinturas(
+    q: str = Query(..., min_length=1, max_length=100, description="Texto a buscar"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+):
+    pattern = f"%{q.strip()}%"
+    if not q.strip():
+        return []
+
+    query = (
+        select(Pintura)
+        .join(Categoria, Categoria.id == Pintura.categoria_id)
+        .where(
+            or_(
+                Pintura.nombre.ilike(pattern),
+                Pintura.autor.ilike(pattern),
+                Pintura.filename_original.ilike(pattern),
+                Categoria.nombre.ilike(pattern),
+                Categoria.slug.ilike(pattern),
+            )
+        )
+        .offset(skip)
+        .limit(limit)
+    )
     return session.exec(query).all()
 
 

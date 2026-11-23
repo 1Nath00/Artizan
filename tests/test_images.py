@@ -1,9 +1,11 @@
 """Tests for the images module."""
 
 import io
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from PIL import Image
+from app.images.models import Image as StoredImage
 
 
 def _make_png_bytes() -> bytes:
@@ -83,6 +85,29 @@ def test_list_images(client, auth_headers):
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
     assert len(resp.json()) >= 1
+
+
+def test_list_images_returns_newest_first(client, auth_headers, db_session):
+    png = _make_png_bytes()
+    image_ids = []
+    for filename in ("older.png", "newer.png"):
+        response = client.post(
+            "/images/upload",
+            headers=auth_headers,
+            files={"file": (filename, png, "image/png")},
+        )
+        image_ids.append(response.json()["id"])
+
+    older = db_session.get(StoredImage, image_ids[0])
+    newer = db_session.get(StoredImage, image_ids[1])
+    newer.created_at = datetime.now(timezone.utc)
+    older.created_at = newer.created_at - timedelta(days=1)
+    db_session.commit()
+
+    response = client.get("/images/", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert [image["id"] for image in response.json()] == [image_ids[1], image_ids[0]]
 
 
 def test_get_image(client, auth_headers):

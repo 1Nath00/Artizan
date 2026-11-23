@@ -90,3 +90,43 @@ def test_list_pinturas_by_categoria_slug_returns_404_for_unknown_slug(client):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Categoría no encontrada"}
+
+
+def test_search_pinturas_by_name_author_and_category(client, db_session):
+    barroco = db_session.exec(
+        select(Categoria).where(Categoria.slug == "barroco")
+    ).one()
+    db_session.add_all(
+        [
+            Pintura(
+                autor="Leonardo da Vinci",
+                nombre="La Gioconda",
+                categoria_id=barroco.id,
+                url_imagen="https://example.test/gioconda.jpg",
+                filename_original="search-gioconda.jpg",
+            ),
+            Pintura(
+                autor="Rembrandt",
+                nombre="Autorretrato",
+                categoria_id=barroco.id,
+                url_imagen="https://example.test/autorretrato.jpg",
+                filename_original="search-autorretrato.jpg",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    by_name = client.get("/pinturas/search", params={"q": "gioc"})
+    by_author = client.get("/pinturas/search", params={"q": "rembrandt"})
+    by_category = client.get("/pinturas/search", params={"q": "barroco"})
+
+    assert by_name.status_code == 200
+    assert [painting["nombre"] for painting in by_name.json()] == ["La Gioconda"]
+    assert [painting["autor"] for painting in by_author.json()] == ["Rembrandt"]
+    assert len(by_category.json()) == 2
+
+
+def test_search_pinturas_requires_query(client):
+    response = client.get("/pinturas/search")
+
+    assert response.status_code == 422

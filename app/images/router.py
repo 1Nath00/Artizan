@@ -15,6 +15,7 @@ from app.images.schemas import AnalyzeResponse, ImageResponse
 from app.models.rag import service as rag_service
 
 router = APIRouter(prefix="/images", tags=["images"])
+IMAGE_DESCRIPTION_FALLBACK = "No fue posible generar la descripción para esta imagen."
 
 
 @router.post("/upload", response_model=ImageResponse, status_code=status.HTTP_201_CREATED)
@@ -227,16 +228,13 @@ def generate_image_description(
             confidence=image.confianza,
             detections=stored_detections or [],
         )
-    except rag_service.InsufficientContextError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
     except rag_service.RAGError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+        request_logger.warning(
+            "Could not generate description for image_id=%s; returning fallback. Cause: %s",
+            image.id,
+            exc,
+        )
+        result = {"answer": IMAGE_DESCRIPTION_FALLBACK}
     except Exception as exc:
         request_logger.exception("Image description generation failed")
         raise HTTPException(
