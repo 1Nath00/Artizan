@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
+from app.categorias.service import get_categoria_by_slug
 from app.database import get_session
 from app.pinturas.models import Pintura
 
@@ -23,6 +24,26 @@ def list_pinturas(
     if autor:
         query = query.where(Pintura.autor.ilike(f"%{autor}%"))
     query = query.offset(skip).limit(limit)
+    return session.exec(query).all()
+
+
+@router.get("/categoria/{slug}", response_model=List[Pintura])
+def list_pinturas_by_categoria_slug(
+    slug: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+):
+    categoria = get_categoria_by_slug(session, slug)
+    if categoria is None:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+
+    query = (
+        select(Pintura)
+        .where(Pintura.categoria_id == categoria.id)
+        .offset(skip)
+        .limit(limit)
+    )
     return session.exec(query).all()
 
 

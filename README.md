@@ -133,6 +133,13 @@ pero sí produce un error explícito al intentar detectar objetos.
 | GET | `/images/{id}/file` | Descargar el archivo de imagen |
 | DELETE | `/images/{id}` | Eliminar una imagen |
 
+### Pinturas
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/pinturas/` | Listar pinturas, con filtros opcionales por ID de categoría y nombre de autor |
+| GET | `/pinturas/categoria/{slug}` | Listar pinturas de una categoría identificada por su slug |
+| GET | `/pinturas/{id}` | Obtener una pintura por ID |
+
 ### CNN – Clasificación de imágenes
 | Método | Ruta | Descripción |
 |--------|------|-------------|
