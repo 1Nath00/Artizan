@@ -565,10 +565,6 @@ def describe_image(
     if confidence is not None and confidence < 0.6 and not answer.startswith(LOW_CONFIDENCE_CAUTION):
         answer = f"{LOW_CONFIDENCE_CAUTION} {answer}"
 
-    citations = [int(citation) for citation in re.findall(r"\[(\d+)\]", answer)]
-    if not citations or any(citation < 1 or citation > len(hits) for citation in citations):
-        raise RAGError("Generated description did not contain valid context citations.")
-
     return {
         "answer": answer,
         "sources": hits,

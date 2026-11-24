@@ -42,6 +42,13 @@ def login(login_data: LoginRequest, session: Session = Depends(get_session)):
     Retorna un token de acceso que debe incluirse en las peticiones subsecuentes
     como: Authorization: Bearer <token>
     """
+    if not get_user_by_email(session, login_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No hay una cuenta registrada con este correo. Regístrate para continuar.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user = authenticate_user(session, login_data.email, login_data.password)
     logger.info(f"Login attempt for user: {login_data.email} - {'Success' if user else 'Failed'}")
     if not user:

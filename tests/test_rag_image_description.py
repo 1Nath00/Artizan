@@ -39,7 +39,7 @@ def test_describe_image_rejects_insufficient_answer_from_model():
             service.describe_image("Barroco", 0.8, [])
 
 
-def test_describe_image_adds_low_confidence_caution_and_requires_citations():
+def test_describe_image_adds_low_confidence_caution():
     hits = [{"filename": "barroco.txt", "text": "El Barroco usa claroscuros."}]
     with patch("app.models.rag.service.retrieve", return_value=hits), patch(
         "app.models.rag.service._generate_answer",
@@ -51,11 +51,19 @@ def test_describe_image_adds_low_confidence_caution_and_requires_citations():
     assert "[1]" in result["answer"]
 
 
-def test_describe_image_rejects_out_of_range_citations():
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "El Barroco emplea claroscuros.",
+        "El Barroco emplea claroscuros [2].",
+    ],
+)
+def test_describe_image_does_not_validate_citations(answer):
     hits = [{"filename": "barroco.txt", "text": "El Barroco usa claroscuros."}]
     with patch("app.models.rag.service.retrieve", return_value=hits), patch(
         "app.models.rag.service._generate_answer",
-        return_value=("El Barroco emplea claroscuros [2].", 0.01),
+        return_value=(answer, 0.01),
     ):
-        with pytest.raises(service.RAGError, match="valid context citations"):
-            service.describe_image("Barroco", 0.8, [])
+        result = service.describe_image("Barroco", 0.8, [])
+
+    assert result["answer"] == answer

@@ -63,6 +63,18 @@ def test_login_wrong_password(client, registered_user):
     assert resp.status_code == 401
 
 
+def test_login_unregistered_email_shows_registration_message(client):
+    resp = client.post(
+        "/auth/login",
+        json={"email": "notregistered@example.com", "password": "Pass1234!"},
+    )
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == (
+        "No hay una cuenta registrada con este correo. Regístrate para continuar."
+    )
+
+
 def test_get_current_user(client, auth_headers, registered_user):
     resp = client.get("/auth/me", headers=auth_headers)
     assert resp.status_code == 200
