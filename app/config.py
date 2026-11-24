@@ -32,3 +32,11 @@ OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 CLOUDINARY_CLOUD_NAME: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
 CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "")
 CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "")
+
+# GROQ API Key
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+
+GROQ_IMAGE_DESCRIPTION_MODEL: str = os.getenv(
+    "GROQ_IMAGE_DESCRIPTION_MODEL",
+    "qwen/qwen3.8-27b",
+)

@@ -2,7 +2,8 @@
 RAG over art-history documents (.txt / .json / .jsonl).
 
 Pipeline: read files -> chunk -> embed (sentence-transformers) -> ChromaDB ->
-retrieve top-k -> answer with an Ollama LLM. Heavy dependencies are loaded lazily.
+retrieve top-k -> answer questions with Ollama and image descriptions with Groq.
+Heavy dependencies are loaded lazily.
 """
 
 from __future__ import annotations
@@ -516,6 +517,38 @@ def _generate_answer(messages: list[dict[str, str]]) -> tuple[str, float]:
     return answer, latency
 
 
+def _generate_image_description_answer(messages: list[dict[str, str]]) -> tuple[str, float]:
+    if not config.GROQ_API_KEY:
+        raise RAGError("GROQ_API_KEY is not configured.")
+
+    from groq import APIError, Groq
+
+    t_llm = time.time()
+    try:
+        response = Groq(api_key=config.GROQ_API_KEY).chat.completions.create(
+            model=config.GROQ_IMAGE_DESCRIPTION_MODEL,
+            messages=messages,
+            temperature=config.RAG_TEMPERATURE,
+        )
+    except APIError as exc:
+        raise RAGError(
+            f"Could not generate image description with Groq model "
+            f"'{config.GROQ_IMAGE_DESCRIPTION_MODEL}'. Cause: {type(exc).__name__}: {exc}"
+        ) from exc
+
+    latency = time.time() - t_llm
+    try:
+        answer = response.choices[0].message.content
+        if not isinstance(answer, str):
+            raise TypeError("Groq returned no text content.")
+        answer = answer.strip()
+    except (AttributeError, IndexError, TypeError) as exc:
+        raise RAGError("Groq returned an invalid image description response.") from exc
+    if not answer:
+        raise RAGError("Groq returned an empty image description.")
+    return answer, latency
+
+
 def ask(question: str, k: int | None = None) -> dict[str, Any]:
     t0 = time.time()
     t_embed = time.time()
@@ -558,7 +591,7 @@ def describe_image(
         raise InsufficientContextError(INSUFFICIENT_CONTEXT_ANSWER)
 
     messages = build_image_description_messages(style, confidence, detections, hits)
-    answer, generation_latency = _generate_answer(messages)
+    answer, generation_latency = _generate_image_description_answer(messages)
     if answer.startswith(INSUFFICIENT_CONTEXT_ANSWER):
         raise InsufficientContextError(INSUFFICIENT_CONTEXT_ANSWER)
 
