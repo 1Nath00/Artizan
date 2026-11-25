@@ -66,6 +66,7 @@ def test_list_pinturas_by_categoria_slug(client, db_session):
                 categoria_id=barroco.id,
                 url_imagen="https://example.test/barroco.jpg",
                 filename_original="endpoint-barroco.jpg",
+                descripcion="Un autorretrato del período barroco.",
             ),
             Pintura(
                 autor="Picasso",
@@ -83,6 +84,7 @@ def test_list_pinturas_by_categoria_slug(client, db_session):
     assert response.status_code == 200
     assert [painting["categoria_id"] for painting in response.json()] == [barroco.id]
     assert response.json()[0]["url_imagen"] == "https://example.test/barroco.jpg"
+    assert response.json()[0]["descripcion"] == "Un autorretrato del período barroco."
 
 
 def test_list_pinturas_by_categoria_slug_returns_404_for_unknown_slug(client):

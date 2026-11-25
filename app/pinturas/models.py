@@ -17,4 +17,5 @@ class Pintura(SQLModel, table=True):
     categoria: Categoria = Relationship()
     url_imagen: str = Field(nullable=False)
     filename_original: str = Field(nullable=False, unique=True)
+    descripcion: Optional[str] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
