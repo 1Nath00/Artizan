@@ -8,14 +8,65 @@ from sqlmodel import Session
 from app.auth.dependencies import get_current_active_user
 from app.auth.models import User
 from app.categorias.models import Categoria
+from app.config import MAX_IMAGE_SIZE_MB
 from app.database import get_session
 from app.images import service
+from app.images import image_search
+from app.images.identification_schemas import (
+    ALLOWED_IDENTIFICATION_CONTENT_TYPES,
+    IdentificarImagenRequest,
+    IdentificarImagenResponse,
+)
 from app.middleware import logger as request_logger
 from app.images.schemas import AnalyzeResponse, ImageResponse
 from app.models.rag import service as rag_service
 
 router = APIRouter(prefix="/images", tags=["images"])
+identification_router = APIRouter(tags=["identificación"])
 IMAGE_DESCRIPTION_FALLBACK = "No fue posible generar la descripción para esta imagen."
+
+
+@identification_router.post("/identificar", response_model=IdentificarImagenResponse)
+def identificar_pintura(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+):
+    """Identifica una pintura de la base de datos por similitud visual."""
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_IDENTIFICATION_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tipo de archivo no permitido. Usa JPEG, PNG o WebP.",
+        )
+    max_bytes = MAX_IMAGE_SIZE_MB * 1024 * 1024
+    content = file.file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"La imagen supera el tamaño máximo permitido de {MAX_IMAGE_SIZE_MB} MB.",
+        )
+    try:
+        IdentificarImagenRequest(
+            content_type=content_type,
+            tamano_bytes=len(content),
+        )
+        return image_search.identificar_imagen(session, content)
+    except image_search.InvalidImageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except image_search.ImageSearchError as exc:
+        request_logger.exception("La identificación visual falló")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El servicio de identificación visual no está disponible.",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El archivo de imagen no es válido.",
+        ) from exc
 
 
 @router.post("/upload", response_model=ImageResponse, status_code=status.HTTP_201_CREATED)

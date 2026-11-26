@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +9,8 @@ from app.database import init_db
 from app.core.errors import register_error_handlers
 from app.categorias.models import Categoria  # noqa: F401
 from app.images.models import Image  # noqa: F401
-from app.images.router import router as images_router
+from app.images import image_search
+from app.images.router import identification_router, router as images_router
 from app.pinturas.models import Pintura  # noqa: F401
 from app.pinturas.router import router as pinturas_router
 from app.middleware import LoggingMiddleware
@@ -18,6 +21,14 @@ from app.models.rag.router import router as rag_router
 # Create database tables
 init_db()
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Inicializa recursos compartidos antes de aceptar solicitudes."""
+    image_search.inicializar_servicio_imagenes()
+    yield
+
+
 app = FastAPI(
     title="Artizan API",
     description=(
@@ -25,6 +36,7 @@ app = FastAPI(
         "CNN image classification (ResNet-50), and NLP text generation (GPT-2)."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 register_error_handlers(app)
 
@@ -40,6 +52,7 @@ app.add_middleware(LoggingMiddleware)
 
 app.include_router(auth_api_router)
 app.include_router(images_router)
+app.include_router(identification_router)
 app.include_router(pinturas_router)
 app.include_router(cnn_router)
 app.include_router(nlp_router)
